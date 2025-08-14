@@ -1,5 +1,6 @@
 "use strict";
-// QUANTARA — robust build with interactive bankroll chart + crosshair.
+// QUANTARA — robust build with interactive bankroll chart and crosshair.
+// Conservative JS (no optional chaining / arrow funcs) to avoid syntax pitfalls.
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
@@ -27,21 +28,21 @@ function emptyNull(id){ const v=($(id).value||"").trim(); return v===""? null : 
 function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Number(p[1])-1, 1); return d.toLocaleString(undefined,{month:"long", year:"numeric"}); }
 function haveChart(){ return !!window.Chart; }
 
-/* ======= Chart plugins (guarded) ======= */
+/* ======= Chart helpers & plugins (guarded) ======= */
 function registerChartPlugins(){
   if(!haveChart()) return;
   try{ if(window.ChartDataLabels){ Chart.register(window.ChartDataLabels); } }catch(e){}
   const hoverVLinePlugin = {
     id:"hoverVLine",
     afterEvent: function(chart, args){
-      var ev = args && args.event ? args.event : null;
-      chart._inArea = args && args.inChartArea ? true : false;
+      const ev = (args && args.event) ? args.event : null;
+      chart._inArea = (args && args.inChartArea) ? true : false;
       chart._mouseX = ev ? ev.x : null;
     },
     beforeDraw: function(chart){
       if(!chart._inArea || !chart._mouseX) return;
-      var area = chart.chartArea; if(!area) return;
-      var ctx = chart.ctx;
+      const area = chart.chartArea; if(!area) return;
+      const ctx = chart.ctx;
       ctx.save();
       ctx.strokeStyle = "rgba(34,211,238,0.35)";
       ctx.setLineDash([4,4]);
@@ -57,35 +58,35 @@ function registerChartPlugins(){
 }
 function lineGradient(ctx){
   if(!haveChart()) return "rgba(34,211,238,0.35)";
-  var g = ctx.chart.ctx;
-  var area = ctx.chart.chartArea;
+  const g = ctx.chart.ctx;
+  const area = ctx.chart.chartArea;
   if(!area) return "rgba(34,211,238,0.35)";
-  var grad = g.createLinearGradient(area.left, area.top, area.right, area.bottom);
+  const grad = g.createLinearGradient(area.left, area.top, area.right, area.bottom);
   grad.addColorStop(0,"rgba(34,211,238,0.55)");
   grad.addColorStop(1,"rgba(124,58,237,0.20)");
   return grad;
 }
 function ringGradient(ctx, idx){
   if(!haveChart()) return "#22d3ee";
-  var g = ctx.chart.ctx;
-  var area = ctx.chart.chartArea;
+  const g = ctx.chart.ctx;
+  const area = ctx.chart.chartArea;
   if(!area) return "#22d3ee";
-  var palettes=[["#22d3ee","#7c3aed"],["#34d399","#0ea5e9"],["#f472b6","#8b5cf6"],["#fde047","#22d3ee"],["#f97316","#22c55e"]];
-  var p=palettes[idx%palettes.length];
-  var grad=g.createLinearGradient(area.left,area.top,area.right,area.bottom);
+  const palettes=[["#22d3ee","#7c3aed"],["#34d399","#0ea5e9"],["#f472b6","#8b5cf6"],["#fde047","#22d3ee"],["#f97316","#22c55e"]];
+  const p=palettes[idx%palettes.length];
+  const grad=g.createLinearGradient(area.left,area.top,area.right,area.bottom);
   grad.addColorStop(0,p[0]); grad.addColorStop(1,p[1]);
   return grad;
 }
-var donutShadow = {
+const donutShadow = {
   id:"donutShadow",
-  beforeDatasetDraw:function(c){ if(!haveChart()||c.config.type!=="doughnut")return; var x=c.ctx; x.save(); x.shadowColor="rgba(0,0,0,0.35)"; x.shadowBlur=14; x.shadowOffsetY=8; },
+  beforeDatasetDraw:function(c){ if(!haveChart()||c.config.type!=="doughnut")return; const x=c.ctx; x.save(); x.shadowColor="rgba(0,0,0,0.35)"; x.shadowBlur=14; x.shadowOffsetY=8; },
   afterDatasetDraw:function(c){ if(!haveChart()||c.config.type!=="doughnut")return; c.ctx.restore(); }
 };
 
 /* ======= Tabs ======= */
 function setTab(tab){
-  var panes={ overview:$("tab-overview"), analytics:$("tab-analytics"), roi:$("tab-roi"), calendar:$("tab-calendar") };
-  var btns ={ overview:$("tab-btn-overview"), analytics:$("tab-btn-analytics"), roi:$("tab-btn-roi"), calendar:$("tab-btn-calendar") };
+  const panes={ overview:$("tab-overview"), analytics:$("tab-analytics"), roi:$("tab-roi"), calendar:$("tab-calendar") };
+  const btns ={ overview:$("tab-btn-overview"), analytics:$("tab-btn-analytics"), roi:$("tab-btn-roi"), calendar:$("tab-btn-calendar") };
   Object.values(panes).forEach(function(p){ p.classList.add("hidden"); });
   Object.values(btns ).forEach(function(b){ b.classList.remove("active"); });
   panes[tab].classList.remove("hidden");
@@ -106,31 +107,31 @@ window.addEventListener("DOMContentLoaded", function(){
 
   $("bankroll-start").value=String(bankrollStart);
   $("save-bankroll").addEventListener("click",function(){
-    var v=Number($("bankroll-start").value||"0");
+    const v=Number($("bankroll-start").value||"0");
     bankrollStart=isNaN(v)?10000:v;
     localStorage.setItem("quantara_bankroll_start",String(bankrollStart));
     renderKPIs(); drawBankrollChart(); if(!$("tab-analytics").classList.contains("hidden")) renderAnalytics();
   });
 
   $("signup").addEventListener("click",async function(){
-    var email=($("email").value||"").trim(), password=($("password").value||"").trim();
+    const email=($("email").value||"").trim(), password=($("password").value||"").trim();
     if(!email||!password){ alert("Enter email and password"); return; }
-    var out = await supabase.auth.signUp({email:email,password:password});
+    const out = await supabase.auth.signUp({email:email,password:password});
     if(out.error){ alert(out.error.message); return; }
     alert("Account created. Now click 'Sign in'.");
   });
   $("signin").addEventListener("click",async function(){
-    var email=($("email").value||"").trim(), password=($("password").value||"").trim();
+    const email=($("email").value||"").trim(), password=($("password").value||"").trim();
     if(!email||!password){ alert("Enter email and password"); return; }
-    var out = await supabase.auth.signInWithPassword({email:email,password:password});
+    const out = await supabase.auth.signInWithPassword({email:email,password:password});
     if(out.error){ alert(out.error.message); return; }
     await render();
   });
   $("send-link").addEventListener("click",async function(){
-    var email=($("email").value||"").trim();
+    const email=($("email").value||"").trim();
     if(!email){ alert("Enter your email"); return; }
-    var redirect=window.location.origin+window.location.pathname.replace(/\/?$/,"/");
-    var out = await supabase.auth.signInWithOtp({email:email,options:{emailRedirectTo:redirect}});
+    const redirect=window.location.origin+window.location.pathname.replace(/\/?$/,"/");
+    const out = await supabase.auth.signInWithOtp({email:email,options:{emailRedirectTo:redirect}});
     if(out.error){ alert(out.error.message); } else { alert("Check your email."); }
   });
   $("signout").addEventListener("click",async function(){
@@ -141,10 +142,10 @@ window.addEventListener("DOMContentLoaded", function(){
 
   $("add-form").addEventListener("submit", async function(e){
     e.preventDefault();
-    var u = await supabase.auth.getUser();
-    var user = u && u.data ? u.data.user : null;
+    const u = await supabase.auth.getUser();
+    const user = (u && u.data) ? u.data.user : null;
     if(!user){ alert("Please sign in first."); return; }
-    var payload={
+    const payload={
       event_date:$("f-date").value?new Date($("f-date").value).toISOString():new Date().toISOString(),
       sport:$("f-sport").value||"Football",
       league:emptyNull("f-league"),
@@ -155,7 +156,7 @@ window.addEventListener("DOMContentLoaded", function(){
       result:$("f-result").value,
       notes:null
     };
-    var ins = await supabase.from("bets").insert(payload);
+    const ins = await supabase.from("bets").insert(payload);
     if(ins.error){ alert("Insert failed: "+ins.error.message); return; }
     e.target.reset();
     await render();
@@ -170,8 +171,8 @@ window.addEventListener("DOMContentLoaded", function(){
 
 /* ======= Render root ======= */
 async function render(){
-  var sess = await supabase.auth.getSession();
-  var session = sess && sess.data ? sess.data.session : null;
+  const sess = await supabase.auth.getSession();
+  const session = (sess && sess.data) ? sess.data.session : null;
   if(!session){
     q(".container").style.display="none";
     $("signout").style.display="none";
@@ -182,11 +183,11 @@ async function render(){
 
   await supabase.from("profiles").upsert({id:session.user.id});
 
-  var res = await supabase.from("bets_enriched").select("*").order("event_date",{ascending:true});
+  const res = await supabase.from("bets_enriched").select("*").order("event_date",{ascending:true});
   if(res.error){ alert(res.error.message); return; }
 
   allBets=(res.data||[]).map(function(r){
-    var pr = 0;
+    let pr = 0;
     if(r.result==="win"){ pr=(Number(r.odds)-1)*Number(r.stake); }
     else if(r.result==="loss"){ pr=-Number(r.stake); }
     return {
@@ -215,10 +216,10 @@ async function render(){
 
 /* ======= KPIs ======= */
 function renderKPIs(){
-  var stake=allBets.reduce(function(s,b){ return s+b.stake; },0);
-  var profit=allBets.reduce(function(s,b){ return s+b.profit; },0);
-  var settled=allBets.filter(function(b){ return b.result!=="pending"; });
-  var winRate=settled.length? (settled.filter(function(b){ return b.result==="win"; }).length/settled.length*100) : 0;
+  const stake=allBets.reduce(function(s,b){ return s+b.stake; },0);
+  const profit=allBets.reduce(function(s,b){ return s+b.profit; },0);
+  const settled=allBets.filter(function(b){ return b.result!=="pending"; });
+  const winRate=settled.length? (settled.filter(function(b){ return b.result==="win"; }).length/settled.length*100) : 0;
   $("bankroll").textContent=euro(bankrollStart+profit);
   $("staked").textContent=euro(stake);
   $("winrate").textContent=winRate.toFixed(1)+"%";
@@ -226,23 +227,23 @@ function renderKPIs(){
 
 /* ======= Ledger tabs (All + months with P/L pills) ======= */
 function buildMonthTabs(){
-  var wrap=$("month-tabs"); wrap.innerHTML="";
-  var groups=new Map(); // YYYY-MM -> pnl
+  const wrap=$("month-tabs"); wrap.innerHTML="";
+  const groups=new Map(); // YYYY-MM -> pnl
   allBets.forEach(function(b){
-    var k=b.date.slice(0,7);
+    const k=b.date.slice(0,7);
     groups.set(k,(groups.get(k)||0)+b.profit);
   });
-  var totalPnL=allBets.reduce(function(s,b){ return s+b.profit; },0);
+  const totalPnL=allBets.reduce(function(s,b){ return s+b.profit; },0);
 
-  var allBtn=document.createElement("button");
+  const allBtn=document.createElement("button");
   allBtn.className="month-tab"+(activeMonthKey===null?" active":"");
   allBtn.innerHTML="<span>All</span><span class=\"month-pill "+(totalPnL>=0?"pos":"neg")+"\">"+euroShort(totalPnL)+"</span>";
   allBtn.addEventListener("click",function(){ activeMonthKey=null; filterDateISO=null; renderLedger(); buildMonthTabs(); });
   wrap.appendChild(allBtn);
 
   Array.from(groups.keys()).sort().reverse().forEach(function(ym){
-    var pnl=groups.get(ym)||0;
-    var btn=document.createElement("button");
+    const pnl=groups.get(ym)||0;
+    const btn=document.createElement("button");
     btn.className="month-tab"+(activeMonthKey===ym?" active":"");
     btn.innerHTML="<span>"+monthName(ym)+"</span><span class=\"month-pill "+(pnl>=0?"pos":"neg")+"\">"+euroShort(pnl)+"</span>";
     btn.addEventListener("click",function(){ activeMonthKey=(activeMonthKey===ym?null:ym); filterDateISO=null; renderLedger(); buildMonthTabs(); });
@@ -252,14 +253,14 @@ function buildMonthTabs(){
 
 /* ======= Ledger table ======= */
 function renderLedger(){
-  var tbody=q("#ledger tbody"); tbody.innerHTML="";
-  var rows=allBets.slice();
+  const tbody=q("#ledger tbody"); tbody.innerHTML="";
+  let rows=allBets.slice();
   if(activeMonthKey){ rows=rows.filter(function(b){ return b.date.indexOf(activeMonthKey)===0; }); }
   else if(filterDateISO){ rows=rows.filter(function(b){ return b.date===filterDateISO; }); }
 
   rows.forEach(function(b){
-    var tr=document.createElement("tr");
-    var cls=b.profit>=0?"profit-pos":"profit-neg";
+    const tr=document.createElement("tr");
+    const cls=b.profit>=0?"profit-pos":"profit-neg";
     tr.innerHTML =
       "<td>"+b.date+"</td><td>"+b.sport+"</td><td>"+b.league+"</td><td>"+b.market+"</td>"+
       "<td>"+b.selection+"</td><td class='right'>"+b.odds.toFixed(2)+"</td>"+
@@ -272,9 +273,9 @@ function renderLedger(){
 /* ======= Bankroll chart (interactive + crosshair) ======= */
 function drawBankrollChart(){
   if(!haveChart()) return;
-  var ctx=$("bankrollChart").getContext("2d");
-  var sorted=allBets.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
-  var eq=bankrollStart, labels=[], series=[];
+  const ctx=$("bankrollChart").getContext("2d");
+  const sorted=allBets.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+  let eq=bankrollStart; const labels=[]; const series=[];
   sorted.forEach(function(b){ eq+=b.profit; labels.push(b.date); series.push(Number(eq.toFixed(2))); });
 
   if(bankrollChart){ try{ bankrollChart.destroy(); }catch(e){} }
@@ -311,8 +312,8 @@ function drawBankrollChart(){
           align:"top", offset:6, color:"#e7eefc", font:{ weight:600, size:11 },
           formatter:function(v){ return euro(v); },
           display:function(context){
-            var i=context.dataIndex;
-            var last=context.dataset.data.length-1;
+            const i=context.dataIndex;
+            const last=context.dataset.data.length-1;
             return i===last || context.active;
           }
         }
@@ -327,8 +328,8 @@ function drawBankrollChart(){
 
 /* ======= Analytics ======= */
 function renderAnalytics(){
-  var settled=allBets.filter(function(b){ return b.result!=="pending"; });
-  var avgOdds = settled.length ? settled.reduce(function(s,b){return s+b.odds;},0)/settled.length : 0;
+  const settled=allBets.filter(function(b){ return b.result!=="pending"; });
+  const avgOdds = settled.length ? settled.reduce(function(s,b){return s+b.odds;},0)/settled.length : 0;
   $("avg-odds").textContent=avgOdds.toFixed(2);
   $("max-dd").textContent=euro(computeMaxDrawdown());
   $("bets-total").textContent=String(allBets.length);
@@ -341,10 +342,10 @@ function renderAnalytics(){
 }
 function drawAnalyticsStakeChart(){
   if(!haveChart()) return;
-  var wrap=q(".donut-wrap-lg"), canvas=$("analyticsStakeChart"), ctx=canvas.getContext("2d");
+  const wrap=q(".donut-wrap-lg"), canvas=$("analyticsStakeChart"), ctx=canvas.getContext("2d");
   canvas.width=wrap.clientWidth; canvas.height=wrap.clientHeight;
-  var bySport={}; allBets.forEach(function(b){ bySport[b.sport]=(bySport[b.sport]||0)+b.stake; });
-  var labels=Object.keys(bySport), values=Object.values(bySport);
+  const bySport={}; allBets.forEach(function(b){ bySport[b.sport]=(bySport[b.sport]||0)+b.stake; });
+  const labels=Object.keys(bySport), values=Object.values(bySport);
   if(analyticsStakeChart){ try{ analyticsStakeChart.destroy(); }catch(e){} }
   analyticsStakeChart=new Chart(ctx,{
     type:"doughnut",
@@ -355,46 +356,47 @@ function drawAnalyticsStakeChart(){
 }
 function drawPnlBarChart(){
   if(!haveChart()) return;
-  var ctx=$("pnlBarChart").getContext("2d");
-  var daily=groupByDateSum(allBets.map(function(b){ return {date:b.date, pnl:b.profit}; }));
-  var labels=daily.map(function(d){return d.date;});
-  var values=daily.map(function(d){return Number(d.pnl.toFixed(2));});
+  const ctx=$("pnlBarChart").getContext("2d");
+  const daily=groupByDateSum(allBets.map(function(b){ return {date:b.date, pnl:b.profit}; }));
+  const labels=daily.map(function(d){return d.date;});
+  const values=daily.map(function(d){return Number(d.pnl.toFixed(2));});
   if(pnlBarChart){ try{ pnlBarChart.destroy(); }catch(e){} }
   pnlBarChart=new Chart(ctx,{ type:"bar", data:{labels:labels, datasets:[{label:"P&L (€)", data:values}]}, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } });
 }
 function drawOddsHistogram(){
   if(!haveChart()) return;
-  var ctx=$("oddsHistChart").getContext("2d");
-  var bins=[[1,1.5],[1.5,2],[2,2.5],[2.5,3],[3,10]], labels=["1–1.5","1.5–2","2–2.5","2.5–3","3+"];
-  var counts=bins.map(function(r){ var lo=r[0], hi=r[1]; return allBets.filter(function(b){ return b.odds>=lo && b.odds<(hi||1e9); }).length; });
+  const ctx=$("oddsHistChart").getContext("2d");
+  const bins=[[1,1.5],[1.5,2],[2,2.5],[2.5,3],[3,10]];
+  const labels=["1–1.5","1.5–2","2–2.5","2.5–3","3+"];
+  const counts=bins.map(function(r){ const lo=r[0], hi=r[1]; return allBets.filter(function(b){ return b.odds>=lo && b.odds<(hi||1e9); }).length; });
   if(oddsHistChart){ try{ oddsHistChart.destroy(); }catch(e){} }
   oddsHistChart=new Chart(ctx,{ type:"bar", data:{labels:labels, datasets:[{label:"Bets", data:counts}]}, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, beginAtZero:true, precision:0} } });
 }
 function drawResultsPie(){
   if(!haveChart()) return;
-  var ctx=$("resultsPieChart").getContext("2d");
-  var counts={win:0,loss:0,pending:0,void:0}; allBets.forEach(function(b){ counts[b.result]=(counts[b.result]||0)+1; });
+  const ctx=$("resultsPieChart").getContext("2d");
+  const counts={win:0,loss:0,pending:0,void:0}; allBets.forEach(function(b){ counts[b.result]=(counts[b.result]||0)+1; });
   if(resultsPieChart){ try{ resultsPieChart.destroy(); }catch(e){} }
   resultsPieChart=new Chart(ctx,{ type:"doughnut", data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void], backgroundColor:function(c){ return ringGradient(c,c.dataIndex); }, borderWidth:1, borderColor:"#0d1524" }]}, options:{ plugins:{legend:{labels:{color:"#e7eefc"}}}, cutout:"65%" }, plugins:[donutShadow] });
 }
 
 /* ======= Calendar ======= */
 function drawCalendar(){
-  var y=currentMonth.getFullYear(), m=currentMonth.getMonth();
+  const y=currentMonth.getFullYear(), m=currentMonth.getMonth();
   $("cal-title").textContent=currentMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
 
-  var sums=new Map(), counts=new Map();
+  const sums=new Map(), counts=new Map();
   allBets.forEach(function(b){ sums.set(b.date,(sums.get(b.date)||0)+b.profit); counts.set(b.date,(counts.get(b.date)||0)+1); });
 
-  var first=new Date(y,m,1);
-  var start=new Date(first); start.setDate(first.getDate()-first.getDay());
-  var grid=$("calendar-grid"); grid.innerHTML="";
+  const first=new Date(y,m,1);
+  const start=new Date(first); start.setDate(first.getDate()-first.getDay());
+  const grid=$("calendar-grid"); grid.innerHTML="";
 
-  for(var i=0;i<42;i++){
-    var d=new Date(start); d.setDate(start.getDate()+i); var iso=d.toISOString().slice(0,10);
-    var pnl=sums.get(iso)||0; var has=counts.has(iso);
+  for(let i=0;i<42;i++){
+    const d=new Date(start); d.setDate(start.getDate()+i); const iso=d.toISOString().slice(0,10);
+    const pnl=sums.get(iso)||0; const has=counts.has(iso);
 
-    var cell=document.createElement("div");
+    const cell=document.createElement("div");
     cell.className="cell"+(d.getMonth()!==m?" out":"")+(selectedCalendarISO===iso?" active":"");
     cell.title = has ? (iso+" — bets: "+counts.get(iso)+", P/L: "+euro(pnl)) : (iso+" — no bets");
     cell.innerHTML = "<div class='date-num'>"+d.getDate()+"</div>"+(has?("<div class='amt "+(pnl>0?"pos":(pnl<0?"neg":""))+"'>"+euroShort(pnl)+"</div>"):"");
@@ -405,17 +407,17 @@ function drawCalendar(){
   }
 }
 function updateDayBox(){
-  var label=$("day-selected"), pill=$("day-pnl"), tbody=$("day-tbody"); tbody.innerHTML="";
+  const label=$("day-selected"), pill=$("day-pnl"), tbody=$("day-tbody"); tbody.innerHTML="";
   if(!selectedCalendarISO){ label.textContent="—"; pill.textContent="€0"; pill.classList.remove("profit-pos"); pill.classList.remove("profit-neg"); return; }
   label.textContent=selectedCalendarISO;
-  var rows=allBets.filter(function(b){ return b.date===selectedCalendarISO; });
-  var dayPnl=rows.reduce(function(s,b){ return s+b.profit; },0);
+  const rows=allBets.filter(function(b){ return b.date===selectedCalendarISO; });
+  const dayPnl=rows.reduce(function(s,b){ return s+b.profit; },0);
   pill.textContent=euro(dayPnl);
   pill.classList.remove("profit-pos"); pill.classList.remove("profit-neg");
   pill.classList.add(dayPnl>=0?"profit-pos":"profit-neg");
   rows.forEach(function(b){
-    var tr=document.createElement("tr");
-    var cls=b.profit>=0?"profit-pos":"profit-neg";
+    const tr=document.createElement("tr");
+    const cls=b.profit>=0?"profit-pos":"profit-neg";
     tr.innerHTML="<td>"+b.sport+"</td><td>"+b.market+"</td><td>"+b.selection+"</td><td class='right'>"+b.odds.toFixed(2)+"</td><td class='right'>€"+b.stake.toFixed(2)+"</td><td class='right'>"+b.result+"</td><td class='right "+cls+"'>€"+b.profit.toFixed(2)+"</td>";
     tbody.appendChild(tr);
   });
@@ -423,27 +425,27 @@ function updateDayBox(){
 
 /* ======= ROI ======= */
 function renderROI(){
-  var settled=allBets.filter(function(b){ return b.result!=="pending" && b.result!=="void"; });
-  var staked=settled.reduce(function(s,b){ return s+b.stake; },0);
-  var profit=settled.reduce(function(s,b){ return s+b.profit; },0);
-  var roi=staked? (profit/staked)*100 : 0;
+  const settled=allBets.filter(function(b){ return b.result!=="pending" && b.result!=="void"; });
+  const staked=settled.reduce(function(s,b){ return s+b.stake; },0);
+  const profit=settled.reduce(function(s,b){ return s+b.profit; },0);
+  const roi=staked? (profit/staked)*100 : 0;
 
   $("roi-overall").textContent = roi.toFixed(2) + "%";
   $("roi-settled").textContent = String(settled.length);
   $("roi-profit").textContent  = euro(profit);
   $("roi-stake").textContent   = euro(staked);
 
-  var bySport={};
+  const bySport={};
   settled.forEach(function(b){
     if(!bySport[b.sport]) bySport[b.sport]={bets:0, stake:0, profit:0};
     bySport[b.sport].bets++; bySport[b.sport].stake+=b.stake; bySport[b.sport].profit+=b.profit;
   });
 
-  var tbody=$("roi-tbody"); tbody.innerHTML="";
+  const tbody=$("roi-tbody"); tbody.innerHTML="";
   Object.keys(bySport).forEach(function(sport){
-    var agg=bySport[sport];
-    var roiPct=agg.stake? (agg.profit/agg.stake)*100 : 0;
-    var tr=document.createElement("tr");
+    const agg=bySport[sport];
+    const roiPct=agg.stake? (agg.profit/agg.stake)*100 : 0;
+    const tr=document.createElement("tr");
     tr.innerHTML="<td>"+sport+"</td><td class='right'>"+agg.bets+"</td><td class='right'>"+euro(agg.stake)+"</td><td class='right "+(agg.profit>=0?"profit-pos":"profit-neg")+"'>"+euro(agg.profit)+"</td><td class='right "+(roiPct>=0?"profit-pos":"profit-neg")+"'>"+roiPct.toFixed(2)+"%</td>";
     tbody.appendChild(tr);
   });
@@ -451,17 +453,17 @@ function renderROI(){
 
 /* ======= Utils ======= */
 function groupByDateSum(items){
-  var map=new Map();
+  const map=new Map();
   items.forEach(function(it){ map.set(it.date,(map.get(it.date)||0)+it.pnl); });
   return Array.from(map.entries()).sort(function(a,b){ return a[0].localeCompare(b[0]); }).map(function(e){ return {date:e[0], pnl:e[1]}; });
 }
 function computeMaxDrawdown(){
-  var sorted=allBets.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
-  var equity=bankrollStart, peak=bankrollStart, maxDD=0;
+  const sorted=allBets.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
+  let equity=bankrollStart, peak=bankrollStart, maxDD=0;
   sorted.forEach(function(b){
     equity+=b.profit;
     if(equity>peak) peak=equity;
-    var dd=peak-equity;
+    const dd=peak-equity;
     if(dd>maxDD) maxDD=dd;
   });
   return maxDD;
