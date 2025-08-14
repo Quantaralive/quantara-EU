@@ -7,39 +7,52 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 window.addEventListener("DOMContentLoaded", () => {
-  const emailInput = document.getElementById("email");
-  const passwordInput = document.getElementById("password");
-  const signupBtn = document.getElementById("signup");
-  const signinBtn = document.getElementById("signin");
+  // Refs
+  const emailInput  = document.getElementById("email");
+  const passInput   = document.getElementById("password");
+  const signupBtn   = document.getElementById("signup");
+  const signinBtn   = document.getElementById("signin");
   const sendLinkBtn = document.getElementById("send-link");
-  const signoutBtn = document.getElementById("signout");
-  const dashboard = document.getElementById("dashboard");
-  const bankrollEl = document.getElementById("bankroll");
-  const stakedEl = document.getElementById("staked");
-  const winrateEl = document.getElementById("winrate");
-  const ledgerBody = document.querySelector("#ledger tbody");
+  const signoutBtn  = document.getElementById("signout");
+  const dashboard   = document.getElementById("dashboard");
+  const bankrollEl  = document.getElementById("bankroll");
+  const stakedEl    = document.getElementById("staked");
+  const winrateEl   = document.getElementById("winrate");
+  const ledgerBody  = document.querySelector("#ledger tbody");
 
-  // Sign up
+  // Small helper to toggle UI without reloading
+  async function render() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      dashboard.style.display = "none";
+      signoutBtn.style.display = "none";
+      return;
+    }
+    signoutBtn.style.display = "inline-block";
+    dashboard.style.display = "block";
+    await supabase.from("profiles").upsert({ id: session.user.id });
+    await loadBets();
+  }
+
+  // EVENTS (no page reloads)
   signupBtn.addEventListener("click", async () => {
     const email = (emailInput.value || "").trim();
-    const password = (passwordInput.value || "").trim();
+    const password = (passInput.value || "").trim();
     if (!email || !password) return alert("Enter email and password");
     const { error } = await supabase.auth.signUp({ email, password });
     if (error) return alert(error.message);
     alert("Account created. Now click 'Sign in'.");
   });
 
-  // Sign in
   signinBtn.addEventListener("click", async () => {
     const email = (emailInput.value || "").trim();
-    const password = (passwordInput.value || "").trim();
+    const password = (passInput.value || "").trim();
     if (!email || !password) return alert("Enter email and password");
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return alert(error.message);
-    location.reload();
+    await render();
   });
 
-  // Magic link (optional) with correct redirect
   sendLinkBtn.addEventListener("click", async () => {
     const email = (emailInput.value || "").trim();
     if (!email) return alert("Enter your email");
@@ -52,42 +65,37 @@ window.addEventListener("DOMContentLoaded", () => {
     else alert("Check your email for the magic link.");
   });
 
-  // Sign out
   signoutBtn.addEventListener("click", async () => {
     await supabase.auth.signOut();
-    location.reload();
+    await render();
   });
 
-  // Init
-  (async function init() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      dashboard.style.display = "none";
-      signoutBtn.style.display = "none";
-    } else {
-      signoutBtn.style.display = "inline-block";
-      dashboard.style.display = "block";
-      await supabase.from("profiles").upsert({ id: session.user.id });
-      await loadBets();
-    }
-    supabase.auth.onAuthStateChange(() => location.reload());
-  })();
+  // Update UI when auth state changes, WITHOUT reloads
+  supabase.auth.onAuthStateChange((_event, _session) => {
+    render();
+  });
 
-  // Load bets
+  // Initial render
+  render();
+
+  // Data
   async function loadBets() {
     const { data, error } = await supabase
       .from("bets_enriched")
       .select("*")
       .order("event_date", { ascending: true });
+
     if (error) return alert(error.message);
 
     ledgerBody.innerHTML = "";
     let totalStake = 0, totalProfit = 0, wins = 0, settled = 0;
 
-    (data || []).forEach((r) => {
+    (data || []).forEach(r => {
       const stake = Number(r.stake) || 0;
-      const odds = Number(r.odds) || 0;
-      const profit = r.result === "win" ? (odds - 1) * stake : (r.result === "loss" ? -stake : 0);
+      const odds  = Number(r.odds) || 0;
+      const profit = r.result === "win" ? (odds - 1) * stake
+                  : r.result === "loss" ? -stake : 0;
+
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>${(r.event_date || "").slice(0,10)}</td>
@@ -102,15 +110,15 @@ window.addEventListener("DOMContentLoaded", () => {
       `;
       ledgerBody.appendChild(tr);
 
-      totalStake += stake;
+      totalStake  += stake;
       totalProfit += profit;
       if (r.result === "win") wins += 1;
       if (r.result !== "pending") settled += 1;
     });
 
-    stakedEl.textContent = euro(totalStake);
+    stakedEl.textContent   = euro(totalStake);
     bankrollEl.textContent = euro(10000 + totalProfit);
-    winrateEl.textContent = settled ? ((wins / settled) * 100).toFixed(1) + "%" : "0%";
+    winrateEl.textContent  = settled ? ((wins/settled)*100).toFixed(1) + "%" : "0%";
   }
 
   function euro(n) {
@@ -124,11 +132,11 @@ window.addEventListener("DOMContentLoaded", () => {
       event_date: document.getElementById("f-date").value
         ? new Date(document.getElementById("f-date").value).toISOString()
         : new Date().toISOString(),
-      sport: document.getElementById("f-sport").value || "Football",
-      league: emptyNull("f-league"),
-      market: emptyNull("f-market"),
+      sport:     document.getElementById("f-sport").value || "Football",
+      league:    emptyNull("f-league"),
+      market:    emptyNull("f-market"),
       selection: emptyNull("f-selection"),
-      odds: parseFloat(document.getElementById("f-odds").value || "1.80"),
+      odds:  parseFloat(document.getElementById("f-odds").value  || "1.80"),
       stake: parseFloat(document.getElementById("f-stake").value || "100"),
       result: document.getElementById("f-result").value,
       notes: null
@@ -136,7 +144,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const { error } = await supabase.from("bets").insert(payload);
     if (error) return alert(error.message);
     e.target.reset();
-    await loadBets();
+    await render();
   });
 
   function emptyNull(id) {
