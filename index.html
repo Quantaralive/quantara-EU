@@ -43,9 +43,10 @@
 
     <!-- Tabs -->
     <div class="tabs">
-      <button id="tab-btn-overview" class="tab active">Overview</button>
-      <button id="tab-btn-roi" class="tab">ROI</button>
-      <button id="tab-btn-calendar" class="tab">Calendar</button>
+      <button id="tab-btn-overview"  class="tab active">Overview</button>
+      <button id="tab-btn-analytics" class="tab">Analytics</button>
+      <button id="tab-btn-roi"       class="tab">ROI</button>
+      <button id="tab-btn-calendar"  class="tab">Calendar</button>
     </div>
 
     <!-- ============== OVERVIEW TAB ============== -->
@@ -79,13 +80,6 @@
         <div class="chart-card">
           <div class="chart-title">Bankroll over time</div>
           <canvas id="bankrollChart" height="180"></canvas>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">Stake by sport</div>
-          <!-- smaller donut area -->
-          <div class="donut-wrap">
-            <canvas id="stakeChart"></canvas>
-          </div>
         </div>
       </section>
 
@@ -123,6 +117,47 @@
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============== ANALYTICS TAB ============== -->
+    <div id="tab-analytics" class="hidden">
+      <section class="cards">
+        <div class="card">
+          <div class="card-label">Average odds (settled)</div>
+          <div class="card-value" id="avg-odds">0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Max drawdown</div>
+          <div class="card-value" id="max-dd">€0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Total bets</div>
+          <div class="card-value" id="bets-total">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Pending</div>
+          <div class="card-value" id="bets-pending">0</div>
+        </div>
+      </section>
+
+      <section class="analytics-charts">
+        <div class="chart-card span-2">
+          <div class="chart-title">Stake by sport</div>
+          <div class="donut-wrap-lg"><canvas id="analyticsStakeChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Daily P&L</div>
+          <canvas id="pnlBarChart" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Odds distribution</div>
+          <canvas id="oddsHistChart" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Results breakdown</div>
+          <canvas id="resultsPieChart" height="200"></canvas>
         </div>
       </section>
     </div>
@@ -176,8 +211,29 @@
           <button id="cal-next" class="btn btn-ghost">›</button>
         </div>
         <div class="calendar-grid" id="calendar-grid"></div>
+
+        <div class="day-summary">
+          <div class="day-summary-title">Day summary</div>
+          <div class="day-summary-row">
+            <div id="day-selected">—</div>
+            <div id="day-pnl" class="pill">€0</div>
+          </div>
+        </div>
+
+        <div class="table-wrap mini">
+          <table>
+            <thead>
+              <tr>
+                <th>Sport</th><th>Market</th><th>Selection</th>
+                <th class="right">Odds</th><th class="right">Stake</th><th class="right">Result</th><th class="right">P/L</th>
+              </tr>
+            </thead>
+            <tbody id="day-tbody"></tbody>
+          </table>
+        </div>
+
         <div class="calendar-legend">
-          <span class="dot has-bet"></span> dates with bets — click to filter overview’s ledger
+          <span class="dot has-bet"></span> dates with bets — click to see P/L
           <button id="clear-filter" class="btn btn-ghost small">Clear</button>
         </div>
       </section>
@@ -185,6 +241,6 @@
   </main>
 
   <!-- Load app last -->
-  <script type="module" src="app.js?v=60"></script>
+  <script type="module" src="app.js?v=71"></script>
 </body>
 </html>
