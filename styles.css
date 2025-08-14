@@ -5,18 +5,15 @@
   --success:#22c55e; --danger:#ef4444;
   --card-glass: rgba(255,255,255,0.04);
 }
-
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
 body{ margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); }
 .hidden{ display:none; }
 
-/* ====== Background ====== */
 .bg{ position:fixed; inset:0; pointer-events:none; }
 .bg-glow{ position:absolute; width:60vmax; height:60vmax; border-radius:50%; left:50%; top:-10vmax; transform:translateX(-50%); background:radial-gradient(closest-side, rgba(124,58,237,0.25), transparent 65%); filter:blur(40px); }
 .bg-grid{ position:absolute; inset:0; background-image:linear-gradient(to right, rgba(255,255,255,0.05) 1px, transparent 1px),linear-gradient(to bottom, rgba(255,255,255,0.05) 1px, transparent 1px); background-size:36px 36px; mask-image:radial-gradient(circle at 50% 0%, black 35%, transparent 80%); opacity:.35; }
 
-/* ====== Topbar ====== */
 .topbar{ position:sticky; top:0; z-index:10; display:flex; justify-content:space-between; align-items:center; padding:14px 20px; background:rgba(8,13,22,0.7); backdrop-filter: blur(12px); border-bottom:1px solid var(--border);}
 .brand{ display:flex; align-items:center; gap:10px; }
 .logo-dot{ width:12px; height:12px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent2)); box-shadow:0 0 18px var(--accent); }
@@ -32,13 +29,10 @@ body{ margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif;
 .btn.small{ padding:6px 10px; font-size:12px; }
 
 .container{ max-width:1150px; margin:24px auto; padding:0 16px; }
-
-/* ====== Tabs ====== */
 .tabs{ display:flex; gap:8px; margin-bottom:12px; position:relative; z-index:2; }
 .tab{ background:var(--card-glass); border:1px solid var(--border); padding:8px 12px; border-radius:10px; cursor:pointer; color:var(--muted); }
 .tab.active{ color:var(--text); border-color:var(--accent2); box-shadow:0 0 0 2px rgba(34,211,238,0.15) inset; }
 
-/* ====== KPI Cards ====== */
 .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 .card{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:14px 16px; backdrop-filter:blur(8px); }
 .card-label{ color:var(--muted); font-size:13px; } .card-value{ font-size:28px; font-weight:700; margin-top:4px; }
@@ -46,40 +40,30 @@ body{ margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif;
 .card.settings input{ background:var(--panel); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:10px; width:160px; }
 .muted{ color:var(--muted); } .small{ font-size:12px; }
 
-/* ====== Charts ====== */
 .charts{ display:grid; grid-template-columns:1fr; gap:12px; margin-top:16px; }
 .chart-card{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px; }
 .chart-title{ color:var(--muted); font-size:13px; margin-bottom:6px; }
 
-/* ====== Analytics ====== */
 .analytics-charts{ display:grid; gap:12px; margin-top:16px; grid-template-columns:1fr 1fr; }
 .analytics-charts .span-2{ grid-column: span 2; }
 .donut-wrap-lg{ width:420px; height:420px; margin:6px auto 2px; position:relative; }
 
-/* ====== Add bet form ====== */
 .entry{ margin-top:16px; }
 .add-form{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px; display:grid; gap:8px; grid-template-columns: repeat(5,1fr) 120px 120px 120px; }
 .add-form .form-title{ grid-column:1/-1; font-weight:600; color:var(--muted); }
 .add-form input, .add-form select{ background:var(--panel); border:1px solid var(--border); color:var(--text); padding:8px 10px; border-radius:10px; outline:none; }
 .add-form button{ grid-column:-2/-1; }
 
-/* ====== Ledger month tabs ====== */
+.ledger-section{ margin-top:16px; }
+.section-title{ color:var(--muted); margin-bottom:6px; }
+
 .month-tabs{ display:flex; gap:8px; overflow-x:auto; padding:6px 0 10px; margin-top:6px; }
-.month-tab{
-  display:flex; align-items:center; gap:8px;
-  background:var(--card-glass); border:1px solid var(--border); color:var(--muted);
-  padding:6px 12px; border-radius:999px; cursor:pointer; white-space:nowrap;
-}
+.month-tab{ display:flex; align-items:center; gap:8px; background:var(--card-glass); border:1px solid var(--border); color:var(--muted); padding:6px 12px; border-radius:999px; cursor:pointer; white-space:nowrap; }
 .month-tab:hover{ border-color:var(--accent2); }
 .month-tab.active{ color:var(--text); border-color:var(--accent2); box-shadow:0 0 0 2px rgba(34,211,238,0.12) inset; }
-.month-pill{
-  padding:2px 8px; border-radius:999px; font-size:12px;
-  background:rgba(255,255,255,0.06); border:1px solid var(--border);
-}
-.month-pill.pos{ color:var(--success); }
-.month-pill.neg{ color:var(--danger); }
+.month-pill{ padding:2px 8px; border-radius:999px; font-size:12px; background:rgba(255,255,255,0.06); border:1px solid var(--border); }
+.month-pill.pos{ color:var(--success); } .month-pill.neg{ color:var(--danger); }
 
-/* ====== Calendar ====== */
 .calendar{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px; }
 .calendar-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
 .calendar-title{ font-weight:600; }
@@ -99,28 +83,13 @@ body{ margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif;
 .pill{ padding:6px 10px; border-radius:999px; background:var(--panel); border:1px solid var(--border); }
 .table-wrap.mini table{ font-size:13px; }
 
-/* ====== Tables ====== */
-.ledger-section{ margin-top:16px; }
-.section-title{ color:var(--muted); margin-bottom:6px; }
 .table-wrap{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; overflow:auto; }
 table{ width:100%; border-collapse:collapse; font-size:14px; }
 thead th{ text-align:left; color:var(--muted); position:sticky; top:0; background:var(--panel); }
 th,td{ padding:10px 12px; border-top:1px solid var(--border); }
 td.right{ text-align:right; }
-.profit-pos{ color:var(--success); }
-.profit-neg{ color:var(--danger); }
+.profit-pos{ color:var(--success); } .profit-neg{ color:var(--danger); }
 
-/* ====== Responsive ====== */
 @media (max-width: 1100px){ .cards{ grid-template-columns:1fr 1fr; } }
-@media (max-width: 900px){
-  .analytics-charts{ grid-template-columns:1fr; }
-  .analytics-charts .span-2{ grid-column:auto; }
-  .donut-wrap-lg{ width:320px; height:320px; }
-}
-@media (max-width: 780px){
-  .cards{ grid-template-columns:1fr; }
-  .charts{ grid-template-columns:1fr; }
-  .add-form{ grid-template-columns:1fr 1fr; }
-  .add-form button{ grid-column:1/-1; }
-  .auth input{ min-width:150px; }
-}
+@media (max-width: 900px){ .analytics-charts{ grid-template-columns:1fr; } .analytics-charts .span-2{ grid-column:auto; } .donut-wrap-lg{ width:320px; height:320px; } }
+@media (max-width: 780px){ .cards{ grid-template-columns:1fr; } .charts{ grid-template-columns:1fr; } .add-form{ grid-template-columns:1fr 1fr; } .add-form button{ grid-column:1/-1; } .auth input{ min-width:150px; } }
