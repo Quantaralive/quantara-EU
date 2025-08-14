@@ -1,0 +1,11 @@
+body { font-family: system-ui, sans-serif; background:#0b1220; color:#e6edf6; margin:0; }
+header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #1c2436; }
+h1 { font-size:18px; margin:0; }
+#auth-area input { padding:8px; }
+#auth-area button { margin-left:8px; padding:8px 12px; }
+.cards { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; padding:16px 20px; }
+.card { background:#0f1628; border:1px solid #1c2436; border-radius:12px; padding:12px; }
+form#add-form { display:grid; grid-template-columns:repeat(5,1fr) 100px 100px 120px; gap:8px; padding:12px 20px; }
+table { width:100%; border-collapse:collapse; }
+th, td { padding:8px 10px; border-top:1px solid #1c2436; }
+thead th { position:sticky; top:0; background:#0f1628; }
