@@ -18,6 +18,8 @@ body{
   background:var(--bg); color:var(--text);
 }
 
+.hidden{ display:none; }
+
 .bg{ position:fixed; inset:0; pointer-events:none; }
 .bg-glow{
   position:absolute; width:60vmax; height:60vmax; border-radius:50%;
@@ -70,6 +72,14 @@ body{
 .btn.small{ padding:6px 10px; font-size:12px; }
 
 .container{ max-width:1150px; margin:24px auto; padding:0 16px; }
+
+/* Tabs */
+.tabs{ display:flex; gap:8px; margin-bottom:12px; }
+.tab{
+  background:var(--card-glass); border:1px solid var(--border);
+  padding:8px 12px; border-radius:10px; cursor:pointer; color:var(--muted);
+}
+.tab.active{ color:var(--text); border-color:var(--accent2); box-shadow:0 0 0 2px rgba(34,211,238,0.15) inset; }
 
 .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 .card{
