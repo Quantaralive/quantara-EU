@@ -4,31 +4,76 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>QUANTARA — AI Betting Diary</title>
+
+  <!-- Fonts for a futuristic vibe -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Chart.js (non-module, exposes window.Chart) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div id="app">
-    <header>
-      <h1>QUANTARA — AI Betting Diary</h1>
-      <div id="auth-area">
-        <input id="email" type="email" placeholder="you@example.com" />
-        <input id="password" type="password" placeholder="password" />
-        <button id="signup"  type="button">Sign up</button>
-        <button id="signin"  type="button">Sign in</button>
-        <button id="send-link" type="button">Magic link</button>
-        <button id="signout" style="display:none;" type="button">Sign out</button>
-      </div>
-    </header>
+  <div class="bg">
+    <div class="bg-glow"></div>
+    <div class="bg-grid"></div>
+  </div>
 
-    <section id="dashboard" style="display:none;">
-      <div class="cards">
-        <div class="card"><div>Bankroll</div><div id="bankroll">€0</div></div>
-        <div class="card"><div>Total staked</div><div id="staked">€0</div></div>
-        <div class="card"><div>Win rate</div><div id="winrate">0%</div></div>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo-dot"></div>
+      <div class="brand-text">
+        <span class="brand-name">QUANTARA</span>
+        <span class="brand-tag">AI Betting Diary</span>
       </div>
+    </div>
+    <div class="auth">
+      <input id="email" type="email" placeholder="you@example.com" />
+      <input id="password" type="password" placeholder="password" />
+      <button id="signup"  type="button" class="btn btn-ghost">Sign up</button>
+      <button id="signin"  type="button" class="btn btn-primary">Sign in</button>
+      <button id="send-link" type="button" class="btn btn-ghost">Magic link</button>
+      <button id="signout" style="display:none;" type="button" class="btn btn-ghost">Sign out</button>
+    </div>
+  </header>
 
-      <h2>Add bet</h2>
-      <form id="add-form">
+  <main class="container">
+
+    <!-- KPI cards -->
+    <section class="cards">
+      <div class="card">
+        <div class="card-label">Bankroll</div>
+        <div class="card-value" id="bankroll">€0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Total staked</div>
+        <div class="card-value" id="staked">€0</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Win rate</div>
+        <div class="card-value" id="winrate">0%</div>
+      </div>
+    </section>
+
+    <!-- Charts -->
+    <section class="charts">
+      <div class="chart-card">
+        <div class="chart-title">Bankroll over time</div>
+        <canvas id="bankrollChart" height="180"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Stake by sport</div>
+        <canvas id="stakeChart" height="180"></canvas>
+      </div>
+    </section>
+
+    <!-- Add bet + Calendar -->
+    <section class="entry-and-calendar">
+      <form id="add-form" class="add-form">
+        <div class="form-title">Add bet</div>
         <input type="date" id="f-date" required />
         <input type="text" id="f-sport" placeholder="Football" required />
         <input type="text" id="f-league" placeholder="Serie A" />
@@ -42,23 +87,42 @@
           <option value="loss">loss</option>
           <option value="void">void</option>
         </select>
-        <button type="submit">Save bet</button>
+        <button type="submit" class="btn btn-primary">Save bet</button>
       </form>
 
-      <h2>Ledger</h2>
-      <table id="ledger">
-        <thead>
-          <tr>
-            <th>Date</th><th>Sport</th><th>League</th><th>Market</th>
-            <th>Selection</th><th>Odds</th><th>Stake</th><th>Result</th><th>Profit</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
+      <div class="calendar">
+        <div class="calendar-header">
+          <button id="cal-prev" class="btn btn-ghost">‹</button>
+          <div id="cal-title" class="calendar-title">Month YYYY</div>
+          <button id="cal-next" class="btn btn-ghost">›</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+        <div class="calendar-legend">
+          <span class="dot has-bet"></span> dates with bets — click to filter
+          <button id="clear-filter" class="btn btn-ghost small">Clear</button>
+        </div>
+      </div>
     </section>
-  </div>
 
-  <!-- Load our app AFTER the DOM. No version/hash, no reload tricks. -->
-  <script type="module" src="app.js"></script>
+    <!-- Ledger -->
+    <section class="ledger-section">
+      <div class="section-title">Ledger</div>
+      <div class="table-wrap">
+        <table id="ledger">
+          <thead>
+            <tr>
+              <th>Date</th><th>Sport</th><th>League</th><th>Market</th>
+              <th>Selection</th><th>Odds</th><th>Stake</th><th>Result</th><th>Profit</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Load our app last -->
+  <script type="module" src="app.js?v=30"></script>
 </body>
 </html>
