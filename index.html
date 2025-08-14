@@ -5,8 +5,6 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>QUANTARA — AI Betting Diary</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- Our app code (ES modules) -->
-  <script type="module" src="app.js"></script>
 </head>
 <body>
   <div id="app">
@@ -15,10 +13,10 @@
       <div id="auth-area">
         <input id="email" type="email" placeholder="you@example.com" />
         <input id="password" type="password" placeholder="password" />
-        <button id="signup">Sign up</button>
-        <button id="signin">Sign in</button>
-        <button id="send-link">Magic link</button>
-        <button id="signout" style="display:none;">Sign out</button>
+        <button id="signup"  type="button">Sign up</button>
+        <button id="signin"  type="button">Sign in</button>
+        <button id="send-link" type="button">Magic link</button>
+        <button id="signout" style="display:none;" type="button">Sign out</button>
       </div>
     </header>
 
@@ -59,5 +57,8 @@
       </table>
     </section>
   </div>
+
+  <!-- Load our app LAST so the DOM exists; ?v=3 busts cache -->
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
