@@ -1,28 +1,50 @@
 // app.js
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// ✅ YOUR project values (safe anon key)
+// ✅ Your Supabase project values (anon key is safe for browser with RLS)
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 
-// Create client (detects the magic-link tokens in URL automatically)
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- UI refs ---
-const emailInput = document.getElementById("email");
-const sendLinkBtn = document.getElementById("send-link");
-const signoutBtn = document.getElementById("signout");
-const dashboard = document.getElementById("dashboard");
-const bankrollEl = document.getElementById("bankroll");
-const stakedEl = document.getElementById("staked");
-const winrateEl = document.getElementById("winrate");
-const ledgerBody = document.querySelector("#ledger tbody");
+const emailInput   = document.getElementById("email");
+const passwordInput= document.getElementById("password");
+const signupBtn    = document.getElementById("signup");
+const signinBtn    = document.getElementById("signin");
+const sendLinkBtn  = document.getElementById("send-link");
+const signoutBtn   = document.getElementById("signout");
+const dashboard    = document.getElementById("dashboard");
+const bankrollEl   = document.getElementById("bankroll");
+const stakedEl     = document.getElementById("staked");
+const winrateEl    = document.getElementById("winrate");
+const ledgerBody   = document.querySelector("#ledger tbody");
 
-// --- Send magic link (force correct GitHub Pages path) ---
+// --- Sign up (email+password; no redirects) ---
+signupBtn.addEventListener("click", async () => {
+  const email = (emailInput.value || "").trim();
+  const password = (passwordInput.value || "").trim();
+  if (!email || !password) return alert("Enter email and password");
+  const { error } = await supabase.auth.signUp({ email, password });
+  if (error) return alert(error.message);
+  alert("Account created. Now click 'Sign in'.");
+});
+
+// --- Sign in (email+password) ---
+signinBtn.addEventListener("click", async () => {
+  const email = (emailInput.value || "").trim();
+  const password = (passwordInput.value || "").trim();
+  if (!email || !password) return alert("Enter email and password");
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return alert(error.message);
+  location.reload();
+});
+
+// --- Magic link (optional; forces correct GitHub Pages path) ---
 sendLinkBtn.addEventListener("click", async () => {
   const email = (emailInput.value || "").trim();
   if (!email) return alert("Enter your email");
-  // Build the exact current path with a trailing slash
+  // Build exact current URL (ensures /REPO_NAME/ path)
   const redirect = window.location.origin + window.location.pathname.replace(/\/?$/, "/");
   const { error } = await supabase.auth.signInWithOtp({
     email,
@@ -38,9 +60,8 @@ signoutBtn.addEventListener("click", async () => {
   location.reload();
 });
 
-// --- Init (handles magic-link session on load) ---
+// --- Init & session handling ---
 async function init() {
-  // Supabase JS will parse #access_token on first load and persist the session
   const { data: { session } } = await supabase.auth.getSession();
 
   if (!session) {
@@ -49,14 +70,13 @@ async function init() {
   } else {
     signoutBtn.style.display = "inline-block";
     dashboard.style.display = "block";
-    // Ensure profile row exists
+    // ensure profile exists
     await supabase.from("profiles").upsert({ id: session.user.id });
     await loadBets();
   }
 
-  // If a new session arrives later (after hash parsed), refresh UI
   supabase.auth.onAuthStateChange((_event, _session) => {
-    // simplest: reload to re-run init()
+    // simplest: refresh UI
     location.reload();
   });
 }
@@ -72,10 +92,7 @@ async function loadBets() {
   if (error) return alert(error.message);
 
   ledgerBody.innerHTML = "";
-  let totalStake = 0;
-  let totalProfit = 0;
-  let wins = 0;
-  let settled = 0;
+  let totalStake = 0, totalProfit = 0, wins = 0, settled = 0;
 
   (data || []).forEach((r) => {
     const stake = Number(r.stake) || 0;
@@ -99,30 +116,11 @@ async function loadBets() {
     `;
     ledgerBody.appendChild(tr);
 
-    totalStake += stake;
+    totalStake  += stake;
     totalProfit += profit;
     if (r.result === "win") wins += 1;
     if (r.result !== "pending") settled += 1;
   });
 
   stakedEl.textContent   = euro(totalStake);
-  bankrollEl.textContent = euro(10000 + totalProfit);
-  winrateEl.textContent  = settled ? ((wins/settled)*100).toFixed(1) + "%" : "0%";
-}
-
-function euro(n) {
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(n || 0);
-}
-
-// --- Add bet ---
-document.getElementById("add-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const payload = {
-    event_date: document.getElementById("f-date").value
-      ? new Date(document.getElementById("f-date").value).toISOString()
-      : new Date().toISOString(),
-    sport:      document.getElementById("f-sport").value || "Football",
-    league:     emptyNull("f-league"),
-    market:     emptyNull("f-market"),
-    selection:  emptyNull("f-selection"),
-    odds:  parseFloat(document.getElementById("f
+  bankrollEl.textContent = euro(10000 + tot
