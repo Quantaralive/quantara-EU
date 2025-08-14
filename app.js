@@ -1,6 +1,7 @@
 // app.js
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
+// Your Supabase project values (anon key is safe in browser with RLS enabled)
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 
@@ -20,7 +21,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const winrateEl   = document.getElementById("winrate");
   const ledgerBody  = document.querySelector("#ledger tbody");
 
-  // Small helper to toggle UI without reloading
+  // Render UI once (no auto refresh)
   async function render() {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -34,7 +35,7 @@ window.addEventListener("DOMContentLoaded", () => {
     await loadBets();
   }
 
-  // EVENTS (no page reloads)
+  // Auth events (all without page reloads)
   signupBtn.addEventListener("click", async () => {
     const email = (emailInput.value || "").trim();
     const password = (passInput.value || "").trim();
@@ -56,6 +57,7 @@ window.addEventListener("DOMContentLoaded", () => {
   sendLinkBtn.addEventListener("click", async () => {
     const email = (emailInput.value || "").trim();
     if (!email) return alert("Enter your email");
+    // Force magic-link to return to this exact page (repo path included)
     const redirect = window.location.origin + window.location.pathname.replace(/\/?$/, "/");
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -70,12 +72,7 @@ window.addEventListener("DOMContentLoaded", () => {
     await render();
   });
 
-  // Update UI when auth state changes, WITHOUT reloads
-  supabase.auth.onAuthStateChange((_event, _session) => {
-    render();
-  });
-
-  // Initial render
+  // Initial paint (no onAuthStateChange loop)
   render();
 
   // Data
@@ -91,8 +88,8 @@ window.addEventListener("DOMContentLoaded", () => {
     let totalStake = 0, totalProfit = 0, wins = 0, settled = 0;
 
     (data || []).forEach(r => {
-      const stake = Number(r.stake) || 0;
-      const odds  = Number(r.odds) || 0;
+      const stake  = Number(r.stake) || 0;
+      const odds   = Number(r.odds)  || 0;
       const profit = r.result === "win" ? (odds - 1) * stake
                   : r.result === "loss" ? -stake : 0;
 
