@@ -16,11 +16,46 @@ let currentMonth = new Date();
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
 
-// --- Auth handlers ---
+// --- Tabs ---
+function setTab(tab){
+  const over = $("tab-overview");
+  const roi  = $("tab-roi");
+  const bOver = $("tab-btn-overview");
+  const bRoi  = $("tab-btn-roi");
+  if (tab === "roi") {
+    over.classList.add("hidden"); roi.classList.remove("hidden");
+    bOver.classList.remove("active"); bRoi.classList.add("active");
+    renderROI();
+  } else {
+    roi.classList.add("hidden"); over.classList.remove("hidden");
+    bRoi.classList.remove("active"); bOver.classList.add("active");
+  }
+}
+
+// --- Chart.js small 3D-like shadow for doughnut ---
+const doughnutShadow = {
+  id: "doughnutShadow",
+  beforeDatasetDraw(chart, args, pluginOptions) {
+    if (chart.config.type !== "doughnut") return;
+    const { ctx } = chart;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.35)";
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetY = 8;
+  },
+  afterDatasetDraw(chart) {
+    if (chart.config.type !== "doughnut") return;
+    chart.ctx.restore();
+  }
+};
+
+// --- Auth handlers & UI wiring ---
 window.addEventListener("DOMContentLoaded", () => {
+  $("tab-btn-overview").addEventListener("click", () => setTab("overview"));
+  $("tab-btn-roi").addEventListener("click", () => setTab("roi"));
+
   // Prefill bankroll start
   $("bankroll-start").value = String(bankrollStart);
-
   $("save-bankroll").addEventListener("click", () => {
     const v = Number($("bankroll-start").value || "0");
     bankrollStart = isNaN(v) ? 10000 : v;
@@ -60,7 +95,7 @@ window.addEventListener("DOMContentLoaded", () => {
     $("signout").style.display = "none";
   });
 
-  // Add bet (omit user_id — DB fills it with auth.uid() per Step 0)
+  // Add bet (omit user_id — DB fills it with auth.uid() per your SQL default)
   $("add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const { data:{ user } } = await supabase.auth.getUser();
@@ -132,10 +167,13 @@ async function render(){
   renderKPIsAndCharts();
   drawCalendar();
   renderLedger();
+
+  // If ROI tab is visible, refresh it too
+  if (!$("tab-roi").classList.contains("hidden")) renderROI();
 }
 
 function renderKPIsAndCharts(){
-  // KPIs
+  // KPIs (Overview)
   const totalStake = allBets.reduce((s,b)=> s + b.stake, 0);
   const totalProfit = allBets.reduce((s,b)=> s + b.profit, 0);
   const settled = allBets.filter(b => b.result !== "pending");
@@ -206,11 +244,20 @@ function drawStakeChart(){
   allBets.forEach(b => { bySport[b.sport] = (bySport[b.sport] || 0) + b.stake; });
   const labels = Object.keys(bySport);
   const values = Object.values(bySport);
+
   if (stakeChart) stakeChart.destroy();
   stakeChart = new Chart(ctx, {
     type: "doughnut",
-    data: { labels, datasets: [{ data: values }] },
-    options: { plugins:{ legend:{ labels:{ color:"#e7eefc" } } }, cutout:"60%" }
+    data: { labels, datasets: [{ data: values, borderWidth: 1 }] },
+    options: {
+      responsive:true,
+      maintainAspectRatio:false,
+      layout:{ padding: 4 },
+      plugins:{ legend:{ labels:{ color:"#e7eefc" } } },
+      cutout: "72%",   /* thinner ring */
+      radius: "68%"    /* smaller overall size */
+    },
+    plugins: [doughnutShadow] // subtle 3D-like shadow
   });
 }
 
@@ -237,6 +284,44 @@ function drawCalendar(){
     cell.addEventListener("click", ()=>{ filterDateISO = (filterDateISO===iso? null : iso); drawCalendar(); renderLedger(); });
     grid.appendChild(cell);
   }
+}
+
+/* -------- ROI Tab -------- */
+function renderROI(){
+  // Use only settled (exclude pending & void) for ROI
+  const settled = allBets.filter(b => b.result !== "pending" && b.result !== "void");
+  const staked = settled.reduce((s,b)=> s + b.stake, 0);
+  const profit = settled.reduce((s,b)=> s + b.profit, 0);
+  const roi = staked ? (profit / staked) * 100 : 0;
+
+  $("roi-overall").textContent = roi.toFixed(2) + "%";
+  $("roi-settled").textContent = String(settled.length);
+  $("roi-profit").textContent = euro(profit);
+  $("roi-stake").textContent = euro(staked);
+
+  // ROI by sport
+  const bySport = {};
+  settled.forEach(b => {
+    if (!bySport[b.sport]) bySport[b.sport] = { bets:0, stake:0, profit:0 };
+    bySport[b.sport].bets += 1;
+    bySport[b.sport].stake += b.stake;
+    bySport[b.sport].profit += b.profit;
+  });
+
+  const tbody = $("roi-tbody");
+  tbody.innerHTML = "";
+  Object.entries(bySport).forEach(([sport, agg]) => {
+    const roiPct = agg.stake ? (agg.profit / agg.stake) * 100 : 0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${sport}</td>
+      <td class="right">${agg.bets}</td>
+      <td class="right">${euro(agg.stake)}</td>
+      <td class="right ${agg.profit>=0?'profit-pos':'profit-neg'}">${euro(agg.profit)}</td>
+      <td class="right ${roiPct>=0?'profit-pos':'profit-neg'}">${roiPct.toFixed(2)}%</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 /* -------- Helpers -------- */
