@@ -45,13 +45,16 @@ body{ margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif;
 
 /* Charts */
 .charts{ display:grid; grid-template-columns:1fr; gap:12px; margin-top:16px; }
-.chart-card{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px; }
+.chart-card{ background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px; position:relative; height:320px; }
 .chart-title{ color:var(--muted); font-size:13px; margin-bottom:6px; }
+.chart-card canvas{ display:block; width:100% !important; height:100% !important; }
 
 /* Analytics */
 .analytics-charts{ display:grid; gap:12px; margin-top:16px; grid-template-columns:1fr 1fr; }
-.analytics-charts .span-2{ grid-column: span 2; }
-.donut-wrap-lg{ width:420px; height:420px; margin:6px auto 2px; position:relative; }
+.analytics-charts .chart-card{ height:260px; }
+.analytics-charts .span-2{ grid-column: span 2; height:380px; }
+.donut-wrap-lg{ width:420px; height:360px; margin:6px auto 2px; position:relative; }
+.donut-wrap-lg canvas{ width:100% !important; height:100% !important; display:block; }
 
 /* Add form */
 .entry{ margin-top:16px; }
@@ -102,8 +105,9 @@ td.right{ text-align:right; }
 @media (max-width: 1100px){ .cards{ grid-template-columns:1fr 1fr; } }
 @media (max-width: 900px){
   .analytics-charts{ grid-template-columns:1fr; }
-  .analytics-charts .span-2{ grid-column:auto; }
-  .donut-wrap-lg{ width:320px; height:320px; }
+  .analytics-charts .span-2{ grid-column:auto; height:320px; }
+  .donut-wrap-lg{ width:320px; height:300px; }
+  .chart-card{ height:280px; }
 }
 @media (max-width: 780px){
   .cards{ grid-template-columns:1fr; }
@@ -111,16 +115,4 @@ td.right{ text-align:right; }
   .add-form{ grid-template-columns:1fr 1fr; }
   .add-form button{ grid-column:1/-1; }
   .auth input{ min-width:150px; }
-  /* --- FIX: stop chart auto-expanding --- */
-.chart-card { position: relative; }
-.chart-card canvas {
-  display: block;
-  width: 100% !important;
-  height: 280px !important;   /* pick the height you like */
-}
-
-/* Optional: set heights for Analytics charts too */
-.analytics-charts .chart-card canvas { height: 240px !important; }
-.analytics-charts .span-2 canvas { height: 360px !important; } /* big donut */
-
 }
