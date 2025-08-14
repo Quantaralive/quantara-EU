@@ -17,9 +17,9 @@ body{
   margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif;
   background:var(--bg); color:var(--text);
 }
-
 .hidden{ display:none; }
 
+/* Background */
 .bg{ position:fixed; inset:0; pointer-events:none; }
 .bg-glow{
   position:absolute; width:60vmax; height:60vmax; border-radius:50%;
@@ -37,8 +37,9 @@ body{
   opacity:.35;
 }
 
+/* Topbar */
 .topbar{
-  position:sticky; top:0; z-index:5;
+  position:sticky; top:0; z-index:10;
   display:flex; justify-content:space-between; align-items:center;
   padding:14px 20px; background:rgba(8,13,22,0.7); backdrop-filter: blur(12px);
   border-bottom:1px solid var(--border);
@@ -74,13 +75,14 @@ body{
 .container{ max-width:1150px; margin:24px auto; padding:0 16px; }
 
 /* Tabs */
-.tabs{ display:flex; gap:8px; margin-bottom:12px; }
+.tabs{ display:flex; gap:8px; margin-bottom:12px; position:relative; z-index:2; }
 .tab{
   background:var(--card-glass); border:1px solid var(--border);
   padding:8px 12px; border-radius:10px; cursor:pointer; color:var(--muted);
 }
 .tab.active{ color:var(--text); border-color:var(--accent2); box-shadow:0 0 0 2px rgba(34,211,238,0.15) inset; }
 
+/* Cards */
 .cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
 .card{
   background:var(--card-glass); border:1px solid var(--border); border-radius:16px;
@@ -96,13 +98,23 @@ body{
 .muted{ color:var(--muted); }
 .small{ font-size:12px; }
 
+/* Charts */
 .charts{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px; }
 .chart-card{
   background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px;
 }
 .chart-title{ color:var(--muted); font-size:13px; margin-bottom:6px; }
 
-.entry-and-calendar{ display:grid; grid-template-columns: 2fr 1fr; gap:12px; margin-top:16px; }
+/* Smaller donut */
+.donut-wrap{
+  width: 260px;
+  height: 260px;
+  margin: 6px auto 2px;
+  position: relative;
+}
+
+/* Entry form */
+.entry{ margin-top:16px; }
 .add-form{
   background:var(--card-glass); border:1px solid var(--border); border-radius:16px;
   padding:12px; display:grid; gap:8px;
@@ -115,6 +127,7 @@ body{
 }
 .add-form button{ grid-column:-2/-1; }
 
+/* Calendar */
 .calendar{
   background:var(--card-glass); border:1px solid var(--border); border-radius:16px; padding:12px;
 }
@@ -137,6 +150,7 @@ body{
 .calendar-legend{ margin-top:8px; color:var(--muted); display:flex; align-items:center; gap:10px; }
 .calendar-legend .dot.has-bet{ width:8px; height:8px; border-radius:50%; background:var(--accent2); display:inline-block; }
 
+/* Tables */
 .ledger-section{ margin-top:16px; }
 .section-title{ color:var(--muted); margin-bottom:6px; }
 .table-wrap{
@@ -149,13 +163,13 @@ td.right{ text-align:right; }
 .profit-pos{ color:var(--success); }
 .profit-neg{ color:var(--danger); }
 
+/* Responsive */
 @media (max-width: 1100px){
   .cards{ grid-template-columns:1fr 1fr; }
 }
 @media (max-width: 780px){
   .cards{ grid-template-columns:1fr; }
   .charts{ grid-template-columns:1fr; }
-  .entry-and-calendar{ grid-template-columns:1fr; }
   .add-form{ grid-template-columns: 1fr 1fr; }
   .add-form button{ grid-column:1/-1; }
   .auth input{ min-width:150px; }
