@@ -123,4 +123,38 @@ async function loadBets() {
   });
 
   stakedEl.textContent   = euro(totalStake);
-  bankrollEl.textContent = euro(10000 + tot
+  bankrollEl.textContent = euro(10000 + totalProfit);
+  winrateEl.textContent  = settled ? ((wins/settled)*100).toFixed(1) + "%" : "0%";
+}
+
+function euro(n) {
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(n || 0);
+}
+
+// --- Add bet ---
+document.getElementById("add-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {
+    event_date: document.getElementById("f-date").value
+      ? new Date(document.getElementById("f-date").value).toISOString()
+      : new Date().toISOString(),
+    sport:      document.getElementById("f-sport").value || "Football",
+    league:     emptyNull("f-league"),
+    market:     emptyNull("f-market"),
+    selection:  emptyNull("f-selection"),
+    odds:  parseFloat(document.getElementById("f-odds").value  || "1.80"),
+    stake: parseFloat(document.getElementById("f-stake").value || "100"),
+    result: document.getElementById("f-result").value,
+    notes: null
+  };
+
+  const { error } = await supabase.from("bets").insert(payload);
+  if (error) return alert(error.message);
+  e.target.reset();
+  await loadBets();
+});
+
+function emptyNull(id) {
+  const v = (document.getElementById(id).value || "").trim();
+  return v === "" ? null : v;
+}
