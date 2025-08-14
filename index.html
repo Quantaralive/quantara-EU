@@ -40,13 +40,15 @@
   </header>
 
   <main class="container">
+
     <!-- Tabs -->
     <div class="tabs">
       <button id="tab-btn-overview" class="tab active">Overview</button>
       <button id="tab-btn-roi" class="tab">ROI</button>
+      <button id="tab-btn-calendar" class="tab">Calendar</button>
     </div>
 
-    <!-- ================= OVERVIEW TAB ================= -->
+    <!-- ============== OVERVIEW TAB ============== -->
     <div id="tab-overview">
       <!-- KPI + Starting Bankroll -->
       <section class="cards">
@@ -80,13 +82,15 @@
         </div>
         <div class="chart-card">
           <div class="chart-title">Stake by sport</div>
-          <!-- smaller canvas for a tighter ring -->
-          <canvas id="stakeChart" height="150" width="150"></canvas>
+          <!-- smaller donut area -->
+          <div class="donut-wrap">
+            <canvas id="stakeChart"></canvas>
+          </div>
         </div>
       </section>
 
-      <!-- Add bet + Calendar -->
-      <section class="entry-and-calendar">
+      <!-- Add bet -->
+      <section class="entry">
         <form id="add-form" class="add-form">
           <div class="form-title">Add bet</div>
           <input type="date" id="f-date" required />
@@ -104,19 +108,6 @@
           </select>
           <button type="submit" class="btn btn-primary">Save bet</button>
         </form>
-
-        <div class="calendar">
-          <div class="calendar-header">
-            <button id="cal-prev" class="btn btn-ghost">‹</button>
-            <div id="cal-title" class="calendar-title">Month YYYY</div>
-            <button id="cal-next" class="btn btn-ghost">›</button>
-          </div>
-          <div class="calendar-grid" id="calendar-grid"></div>
-          <div class="calendar-legend">
-            <span class="dot has-bet"></span> dates with bets — click to filter
-            <button id="clear-filter" class="btn btn-ghost small">Clear</button>
-          </div>
-        </div>
       </section>
 
       <!-- Ledger -->
@@ -136,7 +127,7 @@
       </section>
     </div>
 
-    <!-- ================= ROI TAB ================= -->
+    <!-- ============== ROI TAB ============== -->
     <div id="tab-roi" class="hidden">
       <section class="cards">
         <div class="card">
@@ -175,9 +166,25 @@
         </div>
       </section>
     </div>
+
+    <!-- ============== CALENDAR TAB ============== -->
+    <div id="tab-calendar" class="hidden">
+      <section class="calendar card">
+        <div class="calendar-header">
+          <button id="cal-prev" class="btn btn-ghost">‹</button>
+          <div id="cal-title" class="calendar-title">Month YYYY</div>
+          <button id="cal-next" class="btn btn-ghost">›</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+        <div class="calendar-legend">
+          <span class="dot has-bet"></span> dates with bets — click to filter overview’s ledger
+          <button id="clear-filter" class="btn btn-ghost small">Clear</button>
+        </div>
+      </section>
+    </div>
   </main>
 
   <!-- Load app last -->
-  <script type="module" src="app.js?v=51"></script>
+  <script type="module" src="app.js?v=60"></script>
 </body>
 </html>
