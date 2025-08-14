@@ -13,7 +13,7 @@
   <!-- Styles -->
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Charts -->
+  <!-- Charts (UMD) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
 </head>
@@ -47,7 +47,7 @@
       <button id="tab-btn-calendar"  class="tab">Calendar</button>
     </div>
 
-    <!-- ================== OVERVIEW ================== -->
+    <!-- ========== OVERVIEW ========== -->
     <div id="tab-overview">
       <section class="cards">
         <div class="card"><div class="card-label">Bankroll</div><div class="card-value" id="bankroll">€0</div></div>
@@ -90,7 +90,6 @@
         </form>
       </section>
 
-      <!-- Ledger + month filter row -->
       <section class="ledger-section">
         <div class="section-title">Ledger</div>
         <div id="month-tabs" class="month-tabs"></div>
@@ -108,7 +107,7 @@
       </section>
     </div>
 
-    <!-- ================== ANALYTICS ================== -->
+    <!-- ========== ANALYTICS ========== -->
     <div id="tab-analytics" class="hidden">
       <section class="cards">
         <div class="card"><div class="card-label">Average odds (settled)</div><div class="card-value" id="avg-odds">0.00</div></div>
@@ -137,7 +136,7 @@
       </section>
     </div>
 
-    <!-- ================== ROI ================== -->
+    <!-- ========== ROI ========== -->
     <div id="tab-roi" class="hidden">
       <section class="cards">
         <div class="card"><div class="card-label">Overall ROI</div><div class="card-value" id="roi-overall">0%</div></div>
@@ -165,7 +164,7 @@
       </section>
     </div>
 
-    <!-- ================== CALENDAR ================== -->
+    <!-- ========== CALENDAR ========== -->
     <div id="tab-calendar" class="hidden">
       <section class="calendar card">
         <div class="calendar-header">
@@ -203,7 +202,7 @@
     </div>
   </main>
 
-  <!-- App (bumped for cache-busting) -->
-  <script type="module" src="app.js?v=121"></script>
+  <!-- App -->
+  <script type="module" src="app.js?v=123"></script>
 </body>
 </html>
