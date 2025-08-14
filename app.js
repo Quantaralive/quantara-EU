@@ -5,42 +5,49 @@ const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// --- State ---
+/* ---------------- State ---------------- */
 let bankrollStart = Number(localStorage.getItem("quantara_bankroll_start") || "10000");
 let allBets = [];
 let bankrollChart, stakeChart;
 let filterDateISO = null;
 let currentMonth = new Date();
 
-// --- Refs ---
+/* ---------------- Helpers ---------------- */
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
+const euro = (n) => new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n||0);
+const emptyNull = (id) => { const v = ($(id).value || "").trim(); return v===""? null : v; };
 
-// --- Tabs ---
+/* ---------------- Tabs ---------------- */
 function setTab(tab){
-  const over = $("tab-overview");
-  const roi  = $("tab-roi");
-  const bOver = $("tab-btn-overview");
-  const bRoi  = $("tab-btn-roi");
-  if (tab === "roi") {
-    over.classList.add("hidden"); roi.classList.remove("hidden");
-    bOver.classList.remove("active"); bRoi.classList.add("active");
-    renderROI();
-  } else {
-    roi.classList.add("hidden"); over.classList.remove("hidden");
-    bRoi.classList.remove("active"); bOver.classList.add("active");
-  }
+  const blocks = {
+    overview: $("tab-overview"),
+    roi: $("tab-roi"),
+    calendar: $("tab-calendar")
+  };
+  const buttons = {
+    overview: $("tab-btn-overview"),
+    roi: $("tab-btn-roi"),
+    calendar: $("tab-btn-calendar")
+  };
+  Object.values(blocks).forEach(b => b.classList.add("hidden"));
+  Object.values(buttons).forEach(b => b.classList.remove("active"));
+  blocks[tab].classList.remove("hidden");
+  buttons[tab].classList.add("active");
+
+  if (tab === "roi") renderROI();
+  if (tab === "calendar") drawCalendar();
 }
 
-// --- Chart.js small 3D-like shadow for doughnut ---
-const doughnutShadow = {
-  id: "doughnutShadow",
-  beforeDatasetDraw(chart, args, pluginOptions) {
+/* ---- Doughnut plugins: gradient fill + soft 3D shadow ---- */
+const donutShadow = {
+  id: "donutShadow",
+  beforeDatasetDraw(chart, args) {
     if (chart.config.type !== "doughnut") return;
     const { ctx } = chart;
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,0.35)";
-    ctx.shadowBlur = 15;
+    ctx.shadowBlur = 14;
     ctx.shadowOffsetY = 8;
   },
   afterDatasetDraw(chart) {
@@ -48,13 +55,32 @@ const doughnutShadow = {
     chart.ctx.restore();
   }
 };
+function ringGradient(ctx, idx){
+  const c = ctx.chart;
+  const { ctx: g, chartArea } = c;
+  if (!chartArea) return "#22d3ee";
+  const palettes = [
+    ["#22d3ee","#7c3aed"],
+    ["#00e1ff","#5b21b6"],
+    ["#34d399","#0ea5e9"],
+    ["#f472b6","#8b5cf6"],
+    ["#fde047","#22d3ee"]
+  ];
+  const pair = palettes[idx % palettes.length];
+  const grad = g.createLinearGradient(chartArea.left, chartArea.top, chartArea.right, chartArea.bottom);
+  grad.addColorStop(0, pair[0]);
+  grad.addColorStop(1, pair[1]);
+  return grad;
+}
 
-// --- Auth handlers & UI wiring ---
+/* ---------------- Startup ---------------- */
 window.addEventListener("DOMContentLoaded", () => {
+  // Tabs
   $("tab-btn-overview").addEventListener("click", () => setTab("overview"));
   $("tab-btn-roi").addEventListener("click", () => setTab("roi"));
+  $("tab-btn-calendar").addEventListener("click", () => setTab("calendar"));
 
-  // Prefill bankroll start
+  // Bankroll setting
   $("bankroll-start").value = String(bankrollStart);
   $("save-bankroll").addEventListener("click", () => {
     const v = Number($("bankroll-start").value || "0");
@@ -63,6 +89,7 @@ window.addEventListener("DOMContentLoaded", () => {
     renderKPIsAndCharts();
   });
 
+  // Auth
   $("signup").addEventListener("click", async () => {
     const email = ($("email").value || "").trim();
     const password = ($("password").value || "").trim();
@@ -71,7 +98,6 @@ window.addEventListener("DOMContentLoaded", () => {
     if (error) return alert(error.message);
     alert("Account created. Now click 'Sign in'.");
   });
-
   $("signin").addEventListener("click", async () => {
     const email = ($("email").value || "").trim();
     const password = ($("password").value || "").trim();
@@ -80,7 +106,6 @@ window.addEventListener("DOMContentLoaded", () => {
     if (error) return alert(error.message);
     await render();
   });
-
   $("send-link").addEventListener("click", async () => {
     const email = ($("email").value || "").trim();
     if (!email) return alert("Enter your email");
@@ -88,14 +113,13 @@ window.addEventListener("DOMContentLoaded", () => {
     const { error } = await supabase.auth.signInWithOtp({ email, options:{ emailRedirectTo: redirect }});
     if (error) alert(error.message); else alert("Check your email for the magic link.");
   });
-
   $("signout").addEventListener("click", async () => {
     await supabase.auth.signOut();
     q(".container").style.display = "none";
     $("signout").style.display = "none";
   });
 
-  // Add bet (omit user_id — DB fills it with auth.uid() per your SQL default)
+  // Add bet (user_id auto-filled by DB default/auth.uid())
   $("add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const { data:{ user } } = await supabase.auth.getUser();
@@ -116,7 +140,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const { error } = await supabase.from("bets").insert(payload);
     if (error) return alert("Insert failed: " + error.message);
     e.target.reset();
-    await render(); // reload data
+    await render();
   });
 
   // Calendar controls
@@ -127,7 +151,7 @@ window.addEventListener("DOMContentLoaded", () => {
   render();
 });
 
-// --- Render all ---
+/* ---------------- Render pipeline ---------------- */
 async function render(){
   const { data:{ session } } = await supabase.auth.getSession();
   if (!session) {
@@ -165,19 +189,19 @@ async function render(){
   }));
 
   renderKPIsAndCharts();
-  drawCalendar();
   renderLedger();
 
-  // If ROI tab is visible, refresh it too
+  // refresh current tab extras
   if (!$("tab-roi").classList.contains("hidden")) renderROI();
+  if (!$("tab-calendar").classList.contains("hidden")) drawCalendar();
 }
 
 function renderKPIsAndCharts(){
-  // KPIs (Overview)
-  const totalStake = allBets.reduce((s,b)=> s + b.stake, 0);
+  // KPIs
+  const totalStake  = allBets.reduce((s,b)=> s + b.stake, 0);
   const totalProfit = allBets.reduce((s,b)=> s + b.profit, 0);
-  const settled = allBets.filter(b => b.result !== "pending");
-  const winRate = settled.length ? (settled.filter(b=>b.result==="win").length / settled.length * 100) : 0;
+  const settled     = allBets.filter(b => b.result !== "pending");
+  const winRate     = settled.length ? (settled.filter(b=>b.result==="win").length / settled.length * 100) : 0;
 
   $("bankroll").textContent = euro(bankrollStart + totalProfit);
   $("staked").textContent   = euro(totalStake);
@@ -211,7 +235,7 @@ function renderLedger(){
   });
 }
 
-/* -------- Charts -------- */
+/* ---------------- Charts ---------------- */
 function drawBankrollChart(start){
   const ctx = $("bankrollChart").getContext("2d");
   const sorted = [...allBets].sort((a,b)=> a.date.localeCompare(b.date));
@@ -239,7 +263,12 @@ function drawBankrollChart(start){
 }
 
 function drawStakeChart(){
+  const wrap = q(".donut-wrap");
   const ctx = $("stakeChart").getContext("2d");
+  // Set canvas size to wrapper
+  $("stakeChart").width  = wrap.clientWidth;
+  $("stakeChart").height = wrap.clientHeight;
+
   const bySport = {};
   allBets.forEach(b => { bySport[b.sport] = (bySport[b.sport] || 0) + b.stake; });
   const labels = Object.keys(bySport);
@@ -248,20 +277,28 @@ function drawStakeChart(){
   if (stakeChart) stakeChart.destroy();
   stakeChart = new Chart(ctx, {
     type: "doughnut",
-    data: { labels, datasets: [{ data: values, borderWidth: 1 }] },
-    options: {
-      responsive:true,
-      maintainAspectRatio:false,
-      layout:{ padding: 4 },
-      plugins:{ legend:{ labels:{ color:"#e7eefc" } } },
-      cutout: "72%",   /* thinner ring */
-      radius: "68%"    /* smaller overall size */
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        borderWidth: 1,
+        borderColor: "#0d1524",
+        backgroundColor: (c) => ringGradient(c, c.dataIndex),
+        hoverOffset: 4
+      }]
     },
-    plugins: [doughnutShadow] // subtle 3D-like shadow
+    options: {
+      responsive: false,           // we size it to the wrapper above
+      maintainAspectRatio: false,
+      plugins:{ legend:{ labels:{ color:"#e7eefc" } } },
+      cutout: "80%",               // thinner inner radius
+      radius: "58%"                // smaller overall ring
+    },
+    plugins: [donutShadow]
   });
 }
 
-/* -------- Calendar -------- */
+/* ---------------- Calendar ---------------- */
 function drawCalendar(){
   const y = currentMonth.getFullYear();
   const m = currentMonth.getMonth();
@@ -281,14 +318,13 @@ function drawCalendar(){
     const cell = document.createElement("div");
     cell.className = "cell" + (d.getMonth()!==m ? " out" : "") + (hasBet.has(iso) ? " mark" : "") + (filterDateISO===iso ? " active" : "");
     cell.textContent = d.getDate();
-    cell.addEventListener("click", ()=>{ filterDateISO = (filterDateISO===iso? null : iso); drawCalendar(); renderLedger(); });
+    cell.addEventListener("click", ()=>{ filterDateISO = (filterDateISO===iso? null : iso); drawCalendar(); renderLedger(); setTab("overview"); });
     grid.appendChild(cell);
   }
 }
 
-/* -------- ROI Tab -------- */
+/* ---------------- ROI ---------------- */
 function renderROI(){
-  // Use only settled (exclude pending & void) for ROI
   const settled = allBets.filter(b => b.result !== "pending" && b.result !== "void");
   const staked = settled.reduce((s,b)=> s + b.stake, 0);
   const profit = settled.reduce((s,b)=> s + b.profit, 0);
@@ -296,8 +332,8 @@ function renderROI(){
 
   $("roi-overall").textContent = roi.toFixed(2) + "%";
   $("roi-settled").textContent = String(settled.length);
-  $("roi-profit").textContent = euro(profit);
-  $("roi-stake").textContent = euro(staked);
+  $("roi-profit").textContent  = euro(profit);
+  $("roi-stake").textContent   = euro(staked);
 
   // ROI by sport
   const bySport = {};
@@ -323,7 +359,3 @@ function renderROI(){
     tbody.appendChild(tr);
   });
 }
-
-/* -------- Helpers -------- */
-function euro(n){ return new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n||0); }
-function emptyNull(id){ const v = ($(id).value || "").trim(); return v===""? null : v; }
