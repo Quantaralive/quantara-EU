@@ -8,8 +8,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 /* ---------------- State ---------------- */
 let bankrollStart = Number(localStorage.getItem("quantara_bankroll_start") || "10000");
 let allBets = [];
-let bankrollChart, stakeChart;
+let bankrollChart, analyticsStakeChart, pnlBarChart, oddsHistChart, resultsPieChart;
 let filterDateISO = null;
+let selectedCalendarISO = null;
 let currentMonth = new Date();
 
 /* ---------------- Helpers ---------------- */
@@ -18,15 +19,42 @@ const q = (sel) => document.querySelector(sel);
 const euro = (n) => new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n||0);
 const emptyNull = (id) => { const v = ($(id).value || "").trim(); return v===""? null : v; };
 
+/* Gradient helpers */
+function lineGradient(ctx){
+  const {ctx: g, chartArea} = ctx.chart; if(!chartArea) return "#7c3aed";
+  const grad = g.createLinearGradient(chartArea.left, chartArea.top, chartArea.right, chartArea.bottom);
+  grad.addColorStop(0, "rgba(34,211,238,0.35)");
+  grad.addColorStop(1, "rgba(124,58,237,0.10)");
+  return grad;
+}
+function ringGradient(ctx, idx){
+  const c = ctx.chart; const { ctx: g, chartArea } = c; if (!chartArea) return "#22d3ee";
+  const palettes = [
+    ["#22d3ee","#7c3aed"],["#34d399","#0ea5e9"],
+    ["#f472b6","#8b5cf6"],["#fde047","#22d3ee"],["#f97316","#22c55e"]
+  ];
+  const pair = palettes[idx % palettes.length];
+  const grad = g.createLinearGradient(chartArea.left, chartArea.top, chartArea.right, chartArea.bottom);
+  grad.addColorStop(0, pair[0]); grad.addColorStop(1, pair[1]); return grad;
+}
+/* Doughnut soft shadow */
+const donutShadow = {
+  id:"donutShadow", beforeDatasetDraw(chart){ if(chart.config.type!=="doughnut") return;
+    const ctx = chart.ctx; ctx.save(); ctx.shadowColor="rgba(0,0,0,0.35)"; ctx.shadowBlur=14; ctx.shadowOffsetY=8; },
+  afterDatasetDraw(chart){ if(chart.config.type!=="doughnut") return; chart.ctx.restore(); }
+};
+
 /* ---------------- Tabs ---------------- */
 function setTab(tab){
   const blocks = {
     overview: $("tab-overview"),
+    analytics: $("tab-analytics"),
     roi: $("tab-roi"),
     calendar: $("tab-calendar")
   };
   const buttons = {
     overview: $("tab-btn-overview"),
+    analytics: $("tab-btn-analytics"),
     roi: $("tab-btn-roi"),
     calendar: $("tab-btn-calendar")
   };
@@ -35,61 +63,31 @@ function setTab(tab){
   blocks[tab].classList.remove("hidden");
   buttons[tab].classList.add("active");
 
+  if (tab === "analytics") renderAnalytics();
   if (tab === "roi") renderROI();
   if (tab === "calendar") drawCalendar();
 }
 
-/* ---- Doughnut plugins: gradient fill + soft 3D shadow ---- */
-const donutShadow = {
-  id: "donutShadow",
-  beforeDatasetDraw(chart, args) {
-    if (chart.config.type !== "doughnut") return;
-    const { ctx } = chart;
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.35)";
-    ctx.shadowBlur = 14;
-    ctx.shadowOffsetY = 8;
-  },
-  afterDatasetDraw(chart) {
-    if (chart.config.type !== "doughnut") return;
-    chart.ctx.restore();
-  }
-};
-function ringGradient(ctx, idx){
-  const c = ctx.chart;
-  const { ctx: g, chartArea } = c;
-  if (!chartArea) return "#22d3ee";
-  const palettes = [
-    ["#22d3ee","#7c3aed"],
-    ["#00e1ff","#5b21b6"],
-    ["#34d399","#0ea5e9"],
-    ["#f472b6","#8b5cf6"],
-    ["#fde047","#22d3ee"]
-  ];
-  const pair = palettes[idx % palettes.length];
-  const grad = g.createLinearGradient(chartArea.left, chartArea.top, chartArea.right, chartArea.bottom);
-  grad.addColorStop(0, pair[0]);
-  grad.addColorStop(1, pair[1]);
-  return grad;
-}
-
 /* ---------------- Startup ---------------- */
 window.addEventListener("DOMContentLoaded", () => {
-  // Tabs
+  /* Tabs */
   $("tab-btn-overview").addEventListener("click", () => setTab("overview"));
+  $("tab-btn-analytics").addEventListener("click", () => setTab("analytics"));
   $("tab-btn-roi").addEventListener("click", () => setTab("roi"));
   $("tab-btn-calendar").addEventListener("click", () => setTab("calendar"));
 
-  // Bankroll setting
+  /* Bankroll setting */
   $("bankroll-start").value = String(bankrollStart);
   $("save-bankroll").addEventListener("click", () => {
     const v = Number($("bankroll-start").value || "0");
     bankrollStart = isNaN(v) ? 10000 : v;
     localStorage.setItem("quantara_bankroll_start", String(bankrollStart));
-    renderKPIsAndCharts();
+    renderKPIs();
+    drawBankrollChart();
+    if (!$("tab-analytics").classList.contains("hidden")) renderAnalytics();
   });
 
-  // Auth
+  /* Auth */
   $("signup").addEventListener("click", async () => {
     const email = ($("email").value || "").trim();
     const password = ($("password").value || "").trim();
@@ -119,12 +117,11 @@ window.addEventListener("DOMContentLoaded", () => {
     $("signout").style.display = "none";
   });
 
-  // Add bet (user_id auto-filled by DB default/auth.uid())
+  /* Add bet (user_id default in DB) */
   $("add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const { data:{ user } } = await supabase.auth.getUser();
     if (!user) return alert("Please sign in first.");
-
     const payload = {
       event_date: $("f-date").value ? new Date($("f-date").value).toISOString() : new Date().toISOString(),
       sport:     $("f-sport").value || "Football",
@@ -136,22 +133,21 @@ window.addEventListener("DOMContentLoaded", () => {
       result: $("f-result").value,
       notes: null
     };
-
     const { error } = await supabase.from("bets").insert(payload);
     if (error) return alert("Insert failed: " + error.message);
     e.target.reset();
     await render();
   });
 
-  // Calendar controls
+  /* Calendar controls */
   $("cal-prev").addEventListener("click", () => { currentMonth.setMonth(currentMonth.getMonth()-1); drawCalendar(); });
   $("cal-next").addEventListener("click", () => { currentMonth.setMonth(currentMonth.getMonth()+1); drawCalendar(); });
-  $("clear-filter").addEventListener("click", () => { filterDateISO = null; drawCalendar(); renderLedger(); });
+  $("clear-filter").addEventListener("click", () => { selectedCalendarISO = null; filterDateISO = null; drawCalendar(); updateDayBox(); });
 
   render();
 });
 
-/* ---------------- Render pipeline ---------------- */
+/* ---------------- Data load & core renders ---------------- */
 async function render(){
   const { data:{ session } } = await supabase.auth.getSession();
   if (!session) {
@@ -159,19 +155,15 @@ async function render(){
     $("signout").style.display = "none";
     return;
   }
-
   $("signout").style.display = "inline-block";
   q(".container").style.display = "block";
 
-  // Ensure profile exists
   await supabase.from("profiles").upsert({ id: session.user.id });
 
-  // Load bets
   const { data, error } = await supabase
     .from("bets_enriched")
     .select("*")
     .order("event_date", { ascending:true });
-
   if (error) { alert(error.message); return; }
 
   allBets = (data || []).map(r => ({
@@ -188,16 +180,17 @@ async function render(){
           : r.result==="loss" ? -Number(r.stake) : 0
   }));
 
-  renderKPIsAndCharts();
+  renderKPIs();
+  drawBankrollChart();
   renderLedger();
 
-  // refresh current tab extras
+  if (!$("tab-analytics").classList.contains("hidden")) renderAnalytics();
   if (!$("tab-roi").classList.contains("hidden")) renderROI();
-  if (!$("tab-calendar").classList.contains("hidden")) drawCalendar();
+  if (!$("tab-calendar").classList.contains("hidden")) { drawCalendar(); updateDayBox(); }
 }
 
-function renderKPIsAndCharts(){
-  // KPIs
+/* ---------------- KPIs & Ledger ---------------- */
+function renderKPIs(){
   const totalStake  = allBets.reduce((s,b)=> s + b.stake, 0);
   const totalProfit = allBets.reduce((s,b)=> s + b.profit, 0);
   const settled     = allBets.filter(b => b.result !== "pending");
@@ -206,10 +199,6 @@ function renderKPIsAndCharts(){
   $("bankroll").textContent = euro(bankrollStart + totalProfit);
   $("staked").textContent   = euro(totalStake);
   $("winrate").textContent  = winRate.toFixed(1) + "%";
-
-  // Charts
-  drawBankrollChart(bankrollStart);
-  drawStakeChart();
 }
 
 function renderLedger(){
@@ -219,7 +208,7 @@ function renderLedger(){
 
   rows.forEach(b => {
     const tr = document.createElement("tr");
-    const profitClass = b.profit>=0 ? "profit-pos" : "profit-neg";
+    const cls = b.profit>=0 ? "profit-pos" : "profit-neg";
     tr.innerHTML = `
       <td>${b.date}</td>
       <td>${b.sport}</td>
@@ -229,28 +218,24 @@ function renderLedger(){
       <td class="right">${b.odds.toFixed(2)}</td>
       <td class="right">€${b.stake.toFixed(2)}</td>
       <td class="right">${b.result}</td>
-      <td class="right ${profitClass}">€${b.profit.toFixed(2)}</td>
+      <td class="right ${cls}">€${b.profit.toFixed(2)}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 /* ---------------- Charts ---------------- */
-function drawBankrollChart(start){
+function drawBankrollChart(){
   const ctx = $("bankrollChart").getContext("2d");
   const sorted = [...allBets].sort((a,b)=> a.date.localeCompare(b.date));
-  let cum = start;
-  const labels = [];
-  const data = [];
-  sorted.forEach(b=>{
-    cum += b.profit;
-    labels.push(b.date);
-    data.push(Number(cum.toFixed(2)));
-  });
+  let cum = bankrollStart;
+  const labels = [], data = [];
+  sorted.forEach(b => { cum += b.profit; labels.push(b.date); data.push(Number(cum.toFixed(2))); });
+
   if (bankrollChart) bankrollChart.destroy();
   bankrollChart = new Chart(ctx, {
     type: "line",
-    data: { labels, datasets: [{ label:"Bankroll (€)", data, tension:.35, borderWidth:2, pointRadius:0 }] },
+    data: { labels, datasets: [{ label:"Bankroll (€)", data, tension:.35, borderWidth:2, pointRadius:0, fill:true, backgroundColor: (c)=>lineGradient(c) }] },
     options: {
       responsive:true,
       plugins:{ legend:{ display:false }},
@@ -262,20 +247,40 @@ function drawBankrollChart(start){
   });
 }
 
-function drawStakeChart(){
-  const wrap = q(".donut-wrap");
-  const ctx = $("stakeChart").getContext("2d");
-  // Set canvas size to wrapper
-  $("stakeChart").width  = wrap.clientWidth;
-  $("stakeChart").height = wrap.clientHeight;
+/* ---------------- Analytics ---------------- */
+function renderAnalytics(){
+  // KPIs
+  const settled = allBets.filter(b => b.result !== "pending");
+  const avgOdds = settled.length ? settled.reduce((s,b)=> s + b.odds, 0) / settled.length : 0;
+  $("avg-odds").textContent = avgOdds.toFixed(2);
+
+  const maxDD = computeMaxDrawdown();
+  $("max-dd").textContent = euro(maxDD);
+
+  $("bets-total").textContent = String(allBets.length);
+  $("bets-pending").textContent = String(allBets.filter(b => b.result==="pending").length);
+
+  // Charts
+  drawAnalyticsStakeChart();
+  drawPnlBarChart();
+  drawOddsHistogram();
+  drawResultsPie();
+}
+
+function drawAnalyticsStakeChart(){
+  const wrap = q(".donut-wrap-lg");
+  const canvas = $("analyticsStakeChart");
+  const ctx = canvas.getContext("2d");
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
 
   const bySport = {};
   allBets.forEach(b => { bySport[b.sport] = (bySport[b.sport] || 0) + b.stake; });
   const labels = Object.keys(bySport);
   const values = Object.values(bySport);
 
-  if (stakeChart) stakeChart.destroy();
-  stakeChart = new Chart(ctx, {
+  if (analyticsStakeChart) analyticsStakeChart.destroy();
+  analyticsStakeChart = new Chart(ctx, {
     type: "doughnut",
     data: {
       labels,
@@ -284,17 +289,78 @@ function drawStakeChart(){
         borderWidth: 1,
         borderColor: "#0d1524",
         backgroundColor: (c) => ringGradient(c, c.dataIndex),
-        hoverOffset: 4
+        hoverOffset: 6
       }]
     },
     options: {
-      responsive: false,           // we size it to the wrapper above
-      maintainAspectRatio: false,
+      responsive:false, maintainAspectRatio:false,
       plugins:{ legend:{ labels:{ color:"#e7eefc" } } },
-      cutout: "80%",               // thinner inner radius
-      radius: "58%"                // smaller overall ring
+      cutout:"76%", radius:"70%"
     },
-    plugins: [donutShadow]
+    plugins:[donutShadow]
+  });
+}
+
+function drawPnlBarChart(){
+  const ctx = $("pnlBarChart").getContext("2d");
+  const daily = groupByDateSum(allBets.map(b => ({date:b.date, pnl:b.profit})));
+  const labels = daily.map(d => d.date);
+  const values = daily.map(d => Number(d.pnl.toFixed(2)));
+
+  if (pnlBarChart) pnlBarChart.destroy();
+  pnlBarChart = new Chart(ctx, {
+    type:"bar",
+    data:{ labels, datasets:[{ label:"P&L (€)", data:values }] },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:"#93a0b7" }, grid:{ display:false } },
+        y:{ ticks:{ color:"#93a0b7" }, grid:{ color:"rgba(147,160,183,0.1)" } }
+      }
+    }
+  });
+}
+
+function drawOddsHistogram(){
+  const ctx = $("oddsHistChart").getContext("2d");
+  const bins = [[1,1.5],[1.5,2],[2,2.5],[2.5,3],[3,10]];
+  const labels = ["1–1.5","1.5–2","2–2.5","2.5–3","3+"];
+  const counts = bins.map(([lo,hi]) => allBets.filter(b => b.odds>=lo && b.odds<(hi||1e9)).length);
+
+  if (oddsHistChart) oddsHistChart.destroy();
+  oddsHistChart = new Chart(ctx, {
+    type:"bar",
+    data:{ labels, datasets:[{ label:"Bets", data:counts }] },
+    options:{
+      responsive:true,
+      plugins:{ legend:{ display:false } },
+      scales:{
+        x:{ ticks:{ color:"#93a0b7" }, grid:{ display:false } },
+        y:{ ticks:{ color:"#93a0b7" }, grid:{ color:"rgba(147,160,183,0.1)" }, beginAtZero:true, precision:0 }
+      }
+    }
+  });
+}
+
+function drawResultsPie(){
+  const ctx = $("resultsPieChart").getContext("2d");
+  const counts = { win:0, loss:0, pending:0, void:0 };
+  allBets.forEach(b => counts[b.result] = (counts[b.result]||0)+1);
+
+  if (resultsPieChart) resultsPieChart.destroy();
+  resultsPieChart = new Chart(ctx, {
+    type:"doughnut",
+    data:{
+      labels:["win","loss","pending","void"],
+      datasets:[{
+        data:[counts.win, counts.loss, counts.pending, counts.void],
+        backgroundColor:(c)=> ringGradient(c, c.dataIndex),
+        borderWidth:1, borderColor:"#0d1524"
+      }]
+    },
+    options:{ plugins:{ legend:{ labels:{ color:"#e7eefc" } } }, cutout:"65%" },
+    plugins:[donutShadow]
   });
 }
 
@@ -316,11 +382,51 @@ function drawCalendar(){
     const d = new Date(start); d.setDate(start.getDate()+i);
     const iso = d.toISOString().slice(0,10);
     const cell = document.createElement("div");
-    cell.className = "cell" + (d.getMonth()!==m ? " out" : "") + (hasBet.has(iso) ? " mark" : "") + (filterDateISO===iso ? " active" : "");
+    cell.className = "cell" + (d.getMonth()!==m ? " out" : "") + (hasBet.has(iso) ? " mark" : "") + (selectedCalendarISO===iso ? " active" : "");
     cell.textContent = d.getDate();
-    cell.addEventListener("click", ()=>{ filterDateISO = (filterDateISO===iso? null : iso); drawCalendar(); renderLedger(); setTab("overview"); });
+    cell.addEventListener("click", ()=>{
+      selectedCalendarISO = (selectedCalendarISO===iso ? null : iso);
+      filterDateISO = selectedCalendarISO; // also drives Overview ledger, if you switch
+      drawCalendar();
+      updateDayBox();
+    });
     grid.appendChild(cell);
   }
+  updateDayBox();
+}
+
+function updateDayBox(){
+  const label = $("day-selected");
+  const pill  = $("day-pnl");
+  const tbody = $("day-tbody");
+  tbody.innerHTML = "";
+
+  if (!selectedCalendarISO){
+    label.textContent = "—";
+    pill.textContent = "€0";
+    pill.classList.remove("profit-pos","profit-neg");
+    return;
+  }
+  label.textContent = selectedCalendarISO;
+
+  const rows = allBets.filter(b => b.date === selectedCalendarISO);
+  const dayPnl = rows.reduce((s,b)=> s + b.profit, 0);
+  pill.textContent = euro(dayPnl);
+  pill.classList.remove("profit-pos","profit-neg");
+  pill.classList.add(dayPnl>=0 ? "profit-pos" : "profit-neg");
+
+  rows.forEach(b=>{
+    const tr = document.createElement("tr");
+    const cls = b.profit>=0 ? "profit-pos" : "profit-neg";
+    tr.innerHTML = `
+      <td>${b.sport}</td><td>${b.market}</td><td>${b.selection}</td>
+      <td class="right">${b.odds.toFixed(2)}</td>
+      <td class="right">€${b.stake.toFixed(2)}</td>
+      <td class="right">${b.result}</td>
+      <td class="right ${cls}">€${b.profit.toFixed(2)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
 }
 
 /* ---------------- ROI ---------------- */
@@ -358,4 +464,27 @@ function renderROI(){
     `;
     tbody.appendChild(tr);
   });
+}
+
+/* ---------------- Utilities ---------------- */
+function groupByDateSum(items){
+  const map = new Map();
+  items.forEach(({date, pnl}) => map.set(date, (map.get(date)||0)+pnl));
+  return Array.from(map.entries()).sort((a,b)=> a[0].localeCompare(b[0]))
+    .map(([date,pnl]) => ({date, pnl}));
+}
+
+function computeMaxDrawdown(){
+  // Using equity from bankrollStart + cumulative profit
+  const sorted = [...allBets].sort((a,b)=> a.date.localeCompare(b.date));
+  let equity = bankrollStart;
+  let peak = bankrollStart;
+  let maxDD = 0;
+  sorted.forEach(b => {
+    equity += b.profit;
+    peak = Math.max(peak, equity);
+    const dd = peak - equity;      // absolute drawdown in €
+    if (dd > maxDD) maxDD = dd;
+  });
+  return maxDD; // €
 }
