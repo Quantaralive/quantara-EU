@@ -58,7 +58,7 @@
     </section>
   </div>
 
-  <!-- Load our app last; ?v=4 forces the browser to re-download -->
-  <script type="module" src="app.js?v=4"></script>
+  <!-- Load our app AFTER the DOM. No version/hash, no reload tricks. -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
