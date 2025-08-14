@@ -5,7 +5,7 @@ const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* ---------------- State ---------------- */
+/* -------- State -------- */
 let bankrollStart = Number(localStorage.getItem("quantara_bankroll_start") || "10000");
 let allBets = [];
 let bankrollChart, analyticsStakeChart, pnlBarChart, oddsHistChart, resultsPieChart;
@@ -13,13 +13,19 @@ let filterDateISO = null;
 let selectedCalendarISO = null;
 let currentMonth = new Date();
 
-/* ---------------- Helpers ---------------- */
+/* -------- Helpers -------- */
 const $ = (id) => document.getElementById(id);
 const q = (sel) => document.querySelector(sel);
 const euro = (n) => new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(n||0);
+const euroShort = (n) => {
+  const abs = Math.abs(n);
+  const sign = n<0 ? "-" : "";
+  if (abs >= 1000) return `${sign}€${(abs/1000).toFixed(1)}k`;
+  return `${sign}€${abs.toFixed(0)}`;
+};
 const emptyNull = (id) => { const v = ($(id).value || "").trim(); return v===""? null : v; };
 
-/* Gradient helpers */
+/* Gradients */
 function lineGradient(ctx){
   const {ctx: g, chartArea} = ctx.chart; if(!chartArea) return "#7c3aed";
   const grad = g.createLinearGradient(chartArea.left, chartArea.top, chartArea.right, chartArea.bottom);
@@ -37,14 +43,13 @@ function ringGradient(ctx, idx){
   const grad = g.createLinearGradient(chartArea.left, chartArea.top, chartArea.right, chartArea.bottom);
   grad.addColorStop(0, pair[0]); grad.addColorStop(1, pair[1]); return grad;
 }
-/* Doughnut soft shadow */
 const donutShadow = {
   id:"donutShadow", beforeDatasetDraw(chart){ if(chart.config.type!=="doughnut") return;
     const ctx = chart.ctx; ctx.save(); ctx.shadowColor="rgba(0,0,0,0.35)"; ctx.shadowBlur=14; ctx.shadowOffsetY=8; },
   afterDatasetDraw(chart){ if(chart.config.type!=="doughnut") return; chart.ctx.restore(); }
 };
 
-/* ---------------- Tabs ---------------- */
+/* -------- Tabs -------- */
 function setTab(tab){
   const blocks = {
     overview: $("tab-overview"),
@@ -65,10 +70,10 @@ function setTab(tab){
 
   if (tab === "analytics") renderAnalytics();
   if (tab === "roi") renderROI();
-  if (tab === "calendar") drawCalendar();
+  if (tab === "calendar") { drawCalendar(); updateDayBox(); }
 }
 
-/* ---------------- Startup ---------------- */
+/* -------- Startup -------- */
 window.addEventListener("DOMContentLoaded", () => {
   /* Tabs */
   $("tab-btn-overview").addEventListener("click", () => setTab("overview"));
@@ -117,7 +122,7 @@ window.addEventListener("DOMContentLoaded", () => {
     $("signout").style.display = "none";
   });
 
-  /* Add bet (user_id default in DB) */
+  /* Add bet */
   $("add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const { data:{ user } } = await supabase.auth.getUser();
@@ -147,7 +152,7 @@ window.addEventListener("DOMContentLoaded", () => {
   render();
 });
 
-/* ---------------- Data load & core renders ---------------- */
+/* -------- Data load & core renders -------- */
 async function render(){
   const { data:{ session } } = await supabase.auth.getSession();
   if (!session) {
@@ -189,7 +194,7 @@ async function render(){
   if (!$("tab-calendar").classList.contains("hidden")) { drawCalendar(); updateDayBox(); }
 }
 
-/* ---------------- KPIs & Ledger ---------------- */
+/* -------- KPIs & Ledger -------- */
 function renderKPIs(){
   const totalStake  = allBets.reduce((s,b)=> s + b.stake, 0);
   const totalProfit = allBets.reduce((s,b)=> s + b.profit, 0);
@@ -224,7 +229,7 @@ function renderLedger(){
   });
 }
 
-/* ---------------- Charts ---------------- */
+/* -------- Charts -------- */
 function drawBankrollChart(){
   const ctx = $("bankrollChart").getContext("2d");
   const sorted = [...allBets].sort((a,b)=> a.date.localeCompare(b.date));
@@ -247,20 +252,16 @@ function drawBankrollChart(){
   });
 }
 
-/* ---------------- Analytics ---------------- */
+/* -------- Analytics -------- */
 function renderAnalytics(){
-  // KPIs
   const settled = allBets.filter(b => b.result !== "pending");
   const avgOdds = settled.length ? settled.reduce((s,b)=> s + b.odds, 0) / settled.length : 0;
   $("avg-odds").textContent = avgOdds.toFixed(2);
 
-  const maxDD = computeMaxDrawdown();
-  $("max-dd").textContent = euro(maxDD);
-
+  $("max-dd").textContent = euro(computeMaxDrawdown());
   $("bets-total").textContent = String(allBets.length);
   $("bets-pending").textContent = String(allBets.filter(b => b.result==="pending").length);
 
-  // Charts
   drawAnalyticsStakeChart();
   drawPnlBarChart();
   drawOddsHistogram();
@@ -292,11 +293,7 @@ function drawAnalyticsStakeChart(){
         hoverOffset: 6
       }]
     },
-    options: {
-      responsive:false, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ color:"#e7eefc" } } },
-      cutout:"76%", radius:"70%"
-    },
+    options: { responsive:false, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color:"#e7eefc" } } }, cutout:"76%", radius:"70%" },
     plugins:[donutShadow]
   });
 }
@@ -364,13 +361,19 @@ function drawResultsPie(){
   });
 }
 
-/* ---------------- Calendar ---------------- */
+/* -------- Calendar (with P/L in cells) -------- */
 function drawCalendar(){
   const y = currentMonth.getFullYear();
   const m = currentMonth.getMonth();
   $("cal-title").textContent = currentMonth.toLocaleString(undefined, { month:"long", year:"numeric" });
 
-  const hasBet = new Set(allBets.map(b=> b.date));
+  // Build per-day P&L and counts
+  const sums = new Map();   // date -> pnl
+  const counts = new Map(); // date -> bets
+  allBets.forEach(b=>{
+    const s = (sums.get(b.date)||0) + b.profit; sums.set(b.date, s);
+    counts.set(b.date, (counts.get(b.date)||0) + 1);
+  });
 
   const first = new Date(y, m, 1);
   const start = new Date(first);
@@ -381,18 +384,27 @@ function drawCalendar(){
   for(let i=0;i<42;i++){
     const d = new Date(start); d.setDate(start.getDate()+i);
     const iso = d.toISOString().slice(0,10);
+    const pnl = sums.get(iso) || 0;
+    const has = counts.has(iso);
+
     const cell = document.createElement("div");
-    cell.className = "cell" + (d.getMonth()!==m ? " out" : "") + (hasBet.has(iso) ? " mark" : "") + (selectedCalendarISO===iso ? " active" : "");
-    cell.textContent = d.getDate();
+    cell.className = "cell" + (d.getMonth()!==m ? " out" : "") + (selectedCalendarISO===iso ? " active" : "");
+    cell.title = has ? `${iso} — bets: ${counts.get(iso)}, P/L: ${euro(pnl)}` : `${iso} — no bets`;
+
+    cell.innerHTML = `
+      <div class="date-num">${d.getDate()}</div>
+      ${has ? `<div class="amt ${pnl>0?'pos':pnl<0?'neg':''}">${euroShort(pnl)}</div>` : ""}
+    `;
+
     cell.addEventListener("click", ()=>{
       selectedCalendarISO = (selectedCalendarISO===iso ? null : iso);
-      filterDateISO = selectedCalendarISO; // also drives Overview ledger, if you switch
+      filterDateISO = selectedCalendarISO; // also filters Overview ledger if you switch
       drawCalendar();
       updateDayBox();
     });
+
     grid.appendChild(cell);
   }
-  updateDayBox();
 }
 
 function updateDayBox(){
@@ -429,7 +441,7 @@ function updateDayBox(){
   });
 }
 
-/* ---------------- ROI ---------------- */
+/* -------- ROI -------- */
 function renderROI(){
   const settled = allBets.filter(b => b.result !== "pending" && b.result !== "void");
   const staked = settled.reduce((s,b)=> s + b.stake, 0);
@@ -441,7 +453,6 @@ function renderROI(){
   $("roi-profit").textContent  = euro(profit);
   $("roi-stake").textContent   = euro(staked);
 
-  // ROI by sport
   const bySport = {};
   settled.forEach(b => {
     if (!bySport[b.sport]) bySport[b.sport] = { bets:0, stake:0, profit:0 };
@@ -466,25 +477,16 @@ function renderROI(){
   });
 }
 
-/* ---------------- Utilities ---------------- */
+/* -------- Utils -------- */
 function groupByDateSum(items){
   const map = new Map();
   items.forEach(({date, pnl}) => map.set(date, (map.get(date)||0)+pnl));
   return Array.from(map.entries()).sort((a,b)=> a[0].localeCompare(b[0]))
     .map(([date,pnl]) => ({date, pnl}));
 }
-
 function computeMaxDrawdown(){
-  // Using equity from bankrollStart + cumulative profit
   const sorted = [...allBets].sort((a,b)=> a.date.localeCompare(b.date));
-  let equity = bankrollStart;
-  let peak = bankrollStart;
-  let maxDD = 0;
-  sorted.forEach(b => {
-    equity += b.profit;
-    peak = Math.max(peak, equity);
-    const dd = peak - equity;      // absolute drawdown in €
-    if (dd > maxDD) maxDD = dd;
-  });
-  return maxDD; // €
+  let equity = bankrollStart, peak = bankrollStart, maxDD = 0;
+  sorted.forEach(b => { equity += b.profit; peak = Math.max(peak,equity); const dd = peak - equity; if (dd>maxDD) maxDD = dd; });
+  return maxDD;
 }
