@@ -1,4 +1,4 @@
-// app.js — QUANTARA (ledger month tabs WITH P/L pills + interactive charts + analytics + ROI + calendar)
+// app.js — QUANTARA (interactive bankroll chart + crosshair + full app)
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
@@ -7,6 +7,29 @@ const SUPABASE_ANON_KEY =
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 if (window.ChartDataLabels) Chart.register(window.ChartDataLabels);
+
+/* ---------- Crosshair plugin (follows mouse) ---------- */
+const hoverVLinePlugin = {
+  id: "hoverVLine",
+  afterEvent(chart, args) {
+    chart._mouseX = args.event.x;
+    chart._inArea = args.inChartArea;
+  },
+  beforeDraw(chart) {
+    if (!chart._inArea || !chart._mouseX) return;
+    const { ctx, chartArea: { top, bottom } } = chart;
+    ctx.save();
+    ctx.strokeStyle = "rgba(34,211,238,0.35)";
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(chart._mouseX, top);
+    ctx.lineTo(chart._mouseX, bottom);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+Chart.register(hoverVLinePlugin);
 
 /* ---------- State ---------- */
 let bankrollStart = Number(localStorage.getItem("quantara_bankroll_start") || "10000");
@@ -186,7 +209,7 @@ function renderLedger(){
   });
 }
 
-/* ---------- Bankroll chart (interactive) ---------- */
+/* ---------- Bankroll chart (interactive hover + crosshair) ---------- */
 function drawBankrollChart(){
   const ctx=$("bankrollChart").getContext("2d");
   const sorted=[...allBets].sort((a,b)=> a.date.localeCompare(b.date));
@@ -197,15 +220,38 @@ function drawBankrollChart(){
   bankrollChart=new Chart(ctx,{
     type:"line",
     data:{ labels, datasets:[{
-      label:"Bankroll (€)", data:series, borderWidth:2, pointRadius:3, pointHoverRadius:6, tension:.35,
-      fill:true, backgroundColor:(c)=>lineGradient(c)
+      label:"Bankroll (€)",
+      data:series,
+      borderWidth:2,
+      tension:.35,
+      fill:true,
+      backgroundColor:(c)=>lineGradient(c),
+      pointRadius:3,
+      pointHoverRadius:7,
+      pointHitRadius:20
     }]},
     options:{
+      animation:{ duration:300 },
       responsive:true,
-      interaction:{ mode:"index", intersect:false },
+      maintainAspectRatio:false,
+      interaction:{ mode:"nearest", intersect:false },
+      onHover:(evt, elements, chart)=>{ chart.canvas.style.cursor = elements?.length ? "pointer":"default"; },
       plugins:{
         legend:{ display:false },
-        tooltip:{ callbacks:{ label:(ctx)=>" "+euro(ctx.parsed.y) } },
+        tooltip:{
+          enabled:true,
+          backgroundColor:"rgba(13,21,36,0.95)",
+          borderColor:"#1b2740",
+          borderWidth:1,
+          padding:10,
+          displayColors:false,
+          titleColor:"#e7eefc",
+          bodyColor:"#e7eefc",
+          callbacks:{
+            title:(items)=> items[0]?.label || "",
+            label:(ctx)=> " "+euro(ctx.parsed.y)
+          }
+        },
         datalabels:{
           align:"top", offset:6, color:"#e7eefc", font:{ weight:600, size:11 },
           formatter:(v)=>euro(v),
