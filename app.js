@@ -324,6 +324,7 @@ function drawBankrollChart(){
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 200,
       plugins: {
         legend: { display: false },
         tooltip: { enabled: true, displayColors: false, callbacks: { label: function(c){ return " " + euro(c.parsed.y); } } }
@@ -362,7 +363,13 @@ function drawAnalyticsStakeChart(){
   analyticsStakeChart = new Chart(ctx, {
     type: "doughnut",
     data: { labels: labels, datasets: [{ data: values, borderWidth: 1, borderColor: "#0d1524", backgroundColor: ["#22d3ee","#7c3aed","#34d399","#f472b6","#fde047","#f97316"] }] },
-    options: { cutout: "70%", plugins: { legend: { labels: { color: "#e7eefc" } } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 200,
+      cutout: "70%",
+      plugins: { legend: { labels: { color: "#e7eefc" } } }
+    }
   });
 }
 function drawPnlBarChart(){
@@ -376,7 +383,13 @@ function drawPnlBarChart(){
   pnlBarChart = new Chart(ctx, {
     type: "bar",
     data: { labels: labels, datasets: [{ label: "P&L (€)", data: values, backgroundColor: "rgba(124,58,237,0.55)" }] },
-    options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: "#93a0b7" }, grid: { display: false } }, y: { ticks: { color: "#93a0b7" }, grid: { color: "rgba(147,160,183,0.1)" } } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 200,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: "#93a0b7" }, grid: { display: false } }, y: { ticks: { color: "#93a0b7" }, grid: { color: "rgba(147,160,183,0.1)" } } }
+    }
   });
 }
 function drawOddsHistogram(){
@@ -393,7 +406,13 @@ function drawOddsHistogram(){
   oddsHistChart = new Chart(ctx, {
     type: "bar",
     data: { labels: labels, datasets: [{ label: "Bets", data: counts, backgroundColor: "rgba(34,211,238,0.55)" }] },
-    options: { plugins: { legend: { display: false } }, scales: { x: { ticks: { color: "#93a0b7" }, grid: { display: false } }, y: { ticks: { color: "#93a0b7" }, grid: { color: "rgba(147,160,183,0.1)" }, beginAtZero: true, precision: 0 } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 200,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: "#93a0b7" }, grid: { display: false } }, y: { ticks: { color: "#93a0b7" }, grid: { color: "rgba(147,160,183,0.1)" }, beginAtZero: true, precision: 0 } }
+    }
   });
 }
 function drawResultsPie(){
@@ -406,7 +425,13 @@ function drawResultsPie(){
   resultsPieChart = new Chart(ctx, {
     type: "doughnut",
     data: { labels: ["win","loss","pending","void"], datasets: [{ data: [counts.win,counts.loss,counts.pending,counts.void], backgroundColor: ["#22c55e","#ef4444","#7c3aed","#64748b"], borderWidth: 1, borderColor: "#0d1524" }] },
-    options: { cutout: "65%", plugins: { legend: { labels: { color: "#e7eefc" } } } }
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      resizeDelay: 200,
+      cutout: "65%",
+      plugins: { legend: { labels: { color: "#e7eefc" } } }
+    }
   });
 }
 
