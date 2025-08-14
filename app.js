@@ -1,6 +1,5 @@
 "use strict";
-// QUANTARA — robust build with interactive bankroll chart and crosshair.
-// Conservative JS (no optional chaining / arrow funcs) to avoid syntax pitfalls.
+/* ROLLBACK_BASELINE_v130 */
 
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
@@ -13,10 +12,10 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 /* ======= State ======= */
 let bankrollStart = Number(localStorage.getItem("quantara_bankroll_start") || "10000");
 let allBets = [];
-let bankrollChart, analyticsStakeChart, pnlBarChart, oddsHistChart, resultsPieChart;
+let bankrollChart = null, analyticsStakeChart = null, pnlBarChart = null, oddsHistChart = null, resultsPieChart = null;
 let activeMonthKey = null;      // "YYYY-MM" or null
 let filterDateISO = null;       // exact day from Calendar
-let selectedCalendarISO = null; // selected day on Calendar
+let selectedCalendarISO = null; // selected day in Calendar
 let currentMonth = new Date();  // month for Calendar
 
 /* ======= Helpers ======= */
@@ -26,62 +25,6 @@ function euro(n){ return new Intl.NumberFormat("it-IT",{style:"currency",currenc
 function euroShort(n){ const a=Math.abs(n), s=n<0?"-":""; return a>=1000? s+"€"+(a/1000).toFixed(1)+"k" : s+"€"+a.toFixed(0); }
 function emptyNull(id){ const v=($(id).value||"").trim(); return v===""? null : v; }
 function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Number(p[1])-1, 1); return d.toLocaleString(undefined,{month:"long", year:"numeric"}); }
-function haveChart(){ return !!window.Chart; }
-
-/* ======= Chart helpers & plugins (guarded) ======= */
-function registerChartPlugins(){
-  if(!haveChart()) return;
-  try{ if(window.ChartDataLabels){ Chart.register(window.ChartDataLabels); } }catch(e){}
-  const hoverVLinePlugin = {
-    id:"hoverVLine",
-    afterEvent: function(chart, args){
-      const ev = (args && args.event) ? args.event : null;
-      chart._inArea = (args && args.inChartArea) ? true : false;
-      chart._mouseX = ev ? ev.x : null;
-    },
-    beforeDraw: function(chart){
-      if(!chart._inArea || !chart._mouseX) return;
-      const area = chart.chartArea; if(!area) return;
-      const ctx = chart.ctx;
-      ctx.save();
-      ctx.strokeStyle = "rgba(34,211,238,0.35)";
-      ctx.setLineDash([4,4]);
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(chart._mouseX, area.top);
-      ctx.lineTo(chart._mouseX, area.bottom);
-      ctx.stroke();
-      ctx.restore();
-    }
-  };
-  try{ Chart.register(hoverVLinePlugin); }catch(e){}
-}
-function lineGradient(ctx){
-  if(!haveChart()) return "rgba(34,211,238,0.35)";
-  const g = ctx.chart.ctx;
-  const area = ctx.chart.chartArea;
-  if(!area) return "rgba(34,211,238,0.35)";
-  const grad = g.createLinearGradient(area.left, area.top, area.right, area.bottom);
-  grad.addColorStop(0,"rgba(34,211,238,0.55)");
-  grad.addColorStop(1,"rgba(124,58,237,0.20)");
-  return grad;
-}
-function ringGradient(ctx, idx){
-  if(!haveChart()) return "#22d3ee";
-  const g = ctx.chart.ctx;
-  const area = ctx.chart.chartArea;
-  if(!area) return "#22d3ee";
-  const palettes=[["#22d3ee","#7c3aed"],["#34d399","#0ea5e9"],["#f472b6","#8b5cf6"],["#fde047","#22d3ee"],["#f97316","#22c55e"]];
-  const p=palettes[idx%palettes.length];
-  const grad=g.createLinearGradient(area.left,area.top,area.right,area.bottom);
-  grad.addColorStop(0,p[0]); grad.addColorStop(1,p[1]);
-  return grad;
-}
-const donutShadow = {
-  id:"donutShadow",
-  beforeDatasetDraw:function(c){ if(!haveChart()||c.config.type!=="doughnut")return; const x=c.ctx; x.save(); x.shadowColor="rgba(0,0,0,0.35)"; x.shadowBlur=14; x.shadowOffsetY=8; },
-  afterDatasetDraw:function(c){ if(!haveChart()||c.config.type!=="doughnut")return; c.ctx.restore(); }
-};
 
 /* ======= Tabs ======= */
 function setTab(tab){
@@ -98,8 +41,6 @@ function setTab(tab){
 
 /* ======= Startup ======= */
 window.addEventListener("DOMContentLoaded", function(){
-  registerChartPlugins();
-
   $("tab-btn-overview").addEventListener("click",function(){ setTab("overview"); });
   $("tab-btn-analytics").addEventListener("click",function(){ setTab("analytics"); });
   $("tab-btn-roi").addEventListener("click",function(){ setTab("roi"); });
@@ -169,7 +110,7 @@ window.addEventListener("DOMContentLoaded", function(){
   render();
 });
 
-/* ======= Render root ======= */
+/* ======= Main render ======= */
 async function render(){
   const sess = await supabase.auth.getSession();
   const session = (sess && sess.data) ? sess.data.session : null;
@@ -225,7 +166,7 @@ function renderKPIs(){
   $("winrate").textContent=winRate.toFixed(1)+"%";
 }
 
-/* ======= Ledger tabs (All + months with P/L pills) ======= */
+/* ======= Ledger tabs ======= */
 function buildMonthTabs(){
   const wrap=$("month-tabs"); wrap.innerHTML="";
   const groups=new Map(); // YYYY-MM -> pnl
@@ -270,10 +211,12 @@ function renderLedger(){
   });
 }
 
-/* ======= Bankroll chart (interactive + crosshair) ======= */
+/* ======= Charts (simple) ======= */
 function drawBankrollChart(){
-  if(!haveChart()) return;
-  const ctx=$("bankrollChart").getContext("2d");
+  const el = $("bankrollChart");
+  if(!window.Chart || !el) return;
+
+  const ctx=el.getContext("2d");
   const sorted=allBets.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
   let eq=bankrollStart; const labels=[]; const series=[];
   sorted.forEach(function(b){ eq+=b.profit; labels.push(b.date); series.push(Number(eq.toFixed(2))); });
@@ -285,38 +228,19 @@ function drawBankrollChart(){
       label:"Bankroll (€)",
       data:series,
       borderWidth:2,
+      borderColor:"#22d3ee",
+      backgroundColor:"rgba(34,211,238,0.15)",
       tension:0.35,
       fill:true,
-      backgroundColor:function(c){ return lineGradient(c); },
-      pointRadius:3,
-      pointHoverRadius:7,
-      pointHitRadius:20
+      pointRadius:2,
+      pointHoverRadius:6
     }]},
     options:{
-      animation:{ duration:300 },
       responsive:true,
       maintainAspectRatio:false,
-      interaction:{ mode:"nearest", intersect:false },
-      onHover:function(evt, elements, chart){ chart.canvas.style.cursor = (elements && elements.length) ? "pointer" : "default"; },
       plugins:{
         legend:{ display:false },
-        tooltip:{
-          enabled:true,
-          displayColors:false,
-          callbacks:{
-            title:function(items){ return items[0] ? items[0].label : ""; },
-            label:function(ctx){ return " "+euro(ctx.parsed.y); }
-          }
-        },
-        datalabels:{
-          align:"top", offset:6, color:"#e7eefc", font:{ weight:600, size:11 },
-          formatter:function(v){ return euro(v); },
-          display:function(context){
-            const i=context.dataIndex;
-            const last=context.dataset.data.length-1;
-            return i===last || context.active;
-          }
-        }
+        tooltip:{ enabled:true, displayColors:false, callbacks:{ label:function(c){ return " "+euro(c.parsed.y); } } }
       },
       scales:{
         x:{ ticks:{ color:"#93a0b7" }, grid:{ color:"rgba(147,160,183,0.1)" } },
@@ -326,7 +250,6 @@ function drawBankrollChart(){
   });
 }
 
-/* ======= Analytics ======= */
 function renderAnalytics(){
   const settled=allBets.filter(function(b){ return b.result!=="pending"; });
   const avgOdds = settled.length ? settled.reduce(function(s,b){return s+b.odds;},0)/settled.length : 0;
@@ -335,49 +258,40 @@ function renderAnalytics(){
   $("bets-total").textContent=String(allBets.length);
   $("bets-pending").textContent=String(allBets.filter(function(b){ return b.result==="pending"; }).length);
 
-  drawAnalyticsStakeChart();
-  drawPnlBarChart();
-  drawOddsHistogram();
-  drawResultsPie();
+  drawAnalyticsStakeChart(); drawPnlBarChart(); drawOddsHistogram(); drawResultsPie();
 }
 function drawAnalyticsStakeChart(){
-  if(!haveChart()) return;
-  const wrap=q(".donut-wrap-lg"), canvas=$("analyticsStakeChart"), ctx=canvas.getContext("2d");
-  canvas.width=wrap.clientWidth; canvas.height=wrap.clientHeight;
+  const canvas=$("analyticsStakeChart"); if(!window.Chart || !canvas) return;
+  const ctx=canvas.getContext("2d");
   const bySport={}; allBets.forEach(function(b){ bySport[b.sport]=(bySport[b.sport]||0)+b.stake; });
   const labels=Object.keys(bySport), values=Object.values(bySport);
   if(analyticsStakeChart){ try{ analyticsStakeChart.destroy(); }catch(e){} }
-  analyticsStakeChart=new Chart(ctx,{
-    type:"doughnut",
-    data:{ labels:labels, datasets:[{ data:values, borderWidth:1, borderColor:"#0d1524", backgroundColor:function(c){ return ringGradient(c,c.dataIndex); }, hoverOffset:6 }] },
-    options:{ responsive:false, maintainAspectRatio:false, plugins:{ legend:{ labels:{ color:"#e7eefc"} } }, cutout:"76%", radius:"70%" },
-    plugins:[donutShadow]
-  });
+  analyticsStakeChart=new Chart(ctx,{ type:"doughnut", data:{ labels:labels, datasets:[{ data:values, borderWidth:1, borderColor:"#0d1524", backgroundColor:["#22d3ee","#7c3aed","#34d399","#f472b6","#fde047","#f97316"] }] }, options:{ cutout:"70%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } } });
 }
 function drawPnlBarChart(){
-  if(!haveChart()) return;
-  const ctx=$("pnlBarChart").getContext("2d");
+  const canvas=$("pnlBarChart"); if(!window.Chart || !canvas) return;
+  const ctx=canvas.getContext("2d");
   const daily=groupByDateSum(allBets.map(function(b){ return {date:b.date, pnl:b.profit}; }));
   const labels=daily.map(function(d){return d.date;});
   const values=daily.map(function(d){return Number(d.pnl.toFixed(2));});
   if(pnlBarChart){ try{ pnlBarChart.destroy(); }catch(e){} }
-  pnlBarChart=new Chart(ctx,{ type:"bar", data:{labels:labels, datasets:[{label:"P&L (€)", data:values}]}, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } });
+  pnlBarChart=new Chart(ctx,{ type:"bar", data:{labels:labels, datasets:[{label:"P&L (€)", data:values, backgroundColor:"rgba(124,58,237,0.55)"}]}, options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } });
 }
 function drawOddsHistogram(){
-  if(!haveChart()) return;
-  const ctx=$("oddsHistChart").getContext("2d");
+  const canvas=$("oddsHistChart"); if(!window.Chart || !canvas) return;
+  const ctx=canvas.getContext("2d");
   const bins=[[1,1.5],[1.5,2],[2,2.5],[2.5,3],[3,10]];
   const labels=["1–1.5","1.5–2","2–2.5","2.5–3","3+"];
   const counts=bins.map(function(r){ const lo=r[0], hi=r[1]; return allBets.filter(function(b){ return b.odds>=lo && b.odds<(hi||1e9); }).length; });
   if(oddsHistChart){ try{ oddsHistChart.destroy(); }catch(e){} }
-  oddsHistChart=new Chart(ctx,{ type:"bar", data:{labels:labels, datasets:[{label:"Bets", data:counts}]}, options:{ responsive:true, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, beginAtZero:true, precision:0} } });
+  oddsHistChart=new Chart(ctx,{ type:"bar", data:{labels:labels, datasets:[{label:"Bets", data:counts, backgroundColor:"rgba(34,211,238,0.55)"}]}, options:{ plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, beginAtZero:true, precision:0} } });
 }
 function drawResultsPie(){
-  if(!haveChart()) return;
-  const ctx=$("resultsPieChart").getContext("2d");
+  const canvas=$("resultsPieChart"); if(!window.Chart || !canvas) return;
+  const ctx=canvas.getContext("2d");
   const counts={win:0,loss:0,pending:0,void:0}; allBets.forEach(function(b){ counts[b.result]=(counts[b.result]||0)+1; });
   if(resultsPieChart){ try{ resultsPieChart.destroy(); }catch(e){} }
-  resultsPieChart=new Chart(ctx,{ type:"doughnut", data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void], backgroundColor:function(c){ return ringGradient(c,c.dataIndex); }, borderWidth:1, borderColor:"#0d1524" }]}, options:{ plugins:{legend:{labels:{color:"#e7eefc"}}}, cutout:"65%" }, plugins:[donutShadow] });
+  resultsPieChart=new Chart(ctx,{ type:"doughnut", data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void], backgroundColor:["#22c55e","#ef4444","#7c3aed","#64748b"], borderWidth:1, borderColor:"#0d1524" }]}, options:{ cutout:"65%", plugins:{legend:{labels:{color:"#e7eefc"}}} } });
 }
 
 /* ======= Calendar ======= */
@@ -393,22 +307,38 @@ function drawCalendar(){
   const grid=$("calendar-grid"); grid.innerHTML="";
 
   for(let i=0;i<42;i++){
-    const d=new Date(start); d.setDate(start.getDate()+i); const iso=d.toISOString().slice(0,10);
-    const pnl=sums.get(iso)||0; const has=counts.has(iso);
+    const d=new Date(start); d.setDate(start.getDate()+i);
+    const iso=d.toISOString().slice(0,10);
+    const pnl=sums.get(iso)||0;
+    const has=counts.has(iso);
 
     const cell=document.createElement("div");
     cell.className="cell"+(d.getMonth()!==m?" out":"")+(selectedCalendarISO===iso?" active":"");
     cell.title = has ? (iso+" — bets: "+counts.get(iso)+", P/L: "+euro(pnl)) : (iso+" — no bets");
-    cell.innerHTML = "<div class='date-num'>"+d.getDate()+"</div>"+(has?("<div class='amt "+(pnl>0?"pos":(pnl<0?"neg":""))+"'>"+euroShort(pnl)+"</div>"):"");
+    const amountHtml = has ? ("<div class='amt "+(pnl>0?"pos":(pnl<0?"neg":""))+"'>"+euroShort(pnl)+"</div>") : "";
+    cell.innerHTML = "<div class='date-num'>"+d.getDate()+"</div>"+amountHtml;
+
     (function(isoCopy){
-      cell.addEventListener("click",function(){ selectedCalendarISO = (selectedCalendarISO===isoCopy? null : isoCopy); filterDateISO=selectedCalendarISO; drawCalendar(); updateDayBox(); });
+      cell.addEventListener("click",function(){
+        selectedCalendarISO = (selectedCalendarISO===isoCopy? null : isoCopy);
+        filterDateISO=selectedCalendarISO;
+        drawCalendar();
+        updateDayBox();
+      });
     })(iso);
+
     grid.appendChild(cell);
   }
 }
 function updateDayBox(){
-  const label=$("day-selected"), pill=$("day-pnl"), tbody=$("day-tbody"); tbody.innerHTML="";
-  if(!selectedCalendarISO){ label.textContent="—"; pill.textContent="€0"; pill.classList.remove("profit-pos"); pill.classList.remove("profit-neg"); return; }
+  const label=$("day-selected"), pill=$("day-pnl"), tbody=$("day-tbody");
+  tbody.innerHTML="";
+  if(!selectedCalendarISO){
+    label.textContent="—";
+    pill.textContent="€0";
+    pill.classList.remove("profit-pos"); pill.classList.remove("profit-neg");
+    return;
+  }
   label.textContent=selectedCalendarISO;
   const rows=allBets.filter(function(b){ return b.date===selectedCalendarISO; });
   const dayPnl=rows.reduce(function(s,b){ return s+b.profit; },0);
