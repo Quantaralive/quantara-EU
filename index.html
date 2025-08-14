@@ -5,14 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>QUANTARA — AI Betting Diary</title>
 
+  <!-- Futuristic font -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="styles.css" />
+
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="bg"><div class="bg-glow"></div><div class="bg-grid"></div></div>
+  <div class="bg">
+    <div class="bg-glow"></div>
+    <div class="bg-grid"></div>
+  </div>
 
   <header class="topbar">
     <div class="brand">
@@ -33,6 +40,7 @@
   </header>
 
   <main class="container">
+
     <!-- Tabs -->
     <div class="tabs">
       <button id="tab-btn-overview"  class="tab active">Overview</button>
@@ -43,10 +51,20 @@
 
     <!-- ============== OVERVIEW TAB ============== -->
     <div id="tab-overview">
+      <!-- KPI + Starting Bankroll -->
       <section class="cards">
-        <div class="card"><div class="card-label">Bankroll</div><div class="card-value" id="bankroll">€0</div></div>
-        <div class="card"><div class="card-label">Total staked</div><div class="card-value" id="staked">€0</div></div>
-        <div class="card"><div class="card-label">Win rate</div><div class="card-value" id="winrate">0%</div></div>
+        <div class="card">
+          <div class="card-label">Bankroll</div>
+          <div class="card-value" id="bankroll">€0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Total staked</div>
+          <div class="card-value" id="staked">€0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Win rate</div>
+          <div class="card-value" id="winrate">0%</div>
+        </div>
         <div class="card settings">
           <div class="card-label">Starting Bankroll (€)</div>
           <div class="settings-row">
@@ -57,6 +75,7 @@
         </div>
       </section>
 
+      <!-- Charts -->
       <section class="charts">
         <div class="chart-card">
           <div class="chart-title">Bankroll over time</div>
@@ -64,6 +83,7 @@
         </div>
       </section>
 
+      <!-- Add bet -->
       <section class="entry">
         <form id="add-form" class="add-form">
           <div class="form-title">Add bet</div>
@@ -105,10 +125,22 @@
     <!-- ============== ANALYTICS TAB ============== -->
     <div id="tab-analytics" class="hidden">
       <section class="cards">
-        <div class="card"><div class="card-label">Average odds (settled)</div><div class="card-value" id="avg-odds">0.00</div></div>
-        <div class="card"><div class="card-label">Max drawdown</div><div class="card-value" id="max-dd">€0</div></div>
-        <div class="card"><div class="card-label">Total bets</div><div class="card-value" id="bets-total">0</div></div>
-        <div class="card"><div class="card-label">Pending</div><div class="card-value" id="bets-pending">0</div></div>
+        <div class="card">
+          <div class="card-label">Average odds (settled)</div>
+          <div class="card-value" id="avg-odds">0.00</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Max drawdown</div>
+          <div class="card-value" id="max-dd">€0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Total bets</div>
+          <div class="card-value" id="bets-total">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Pending</div>
+          <div class="card-value" id="bets-pending">0</div>
+        </div>
       </section>
 
       <section class="analytics-charts">
@@ -134,10 +166,22 @@
     <!-- ============== ROI TAB ============== -->
     <div id="tab-roi" class="hidden">
       <section class="cards">
-        <div class="card"><div class="card-label">Overall ROI</div><div class="card-value" id="roi-overall">0%</div></div>
-        <div class="card"><div class="card-label">Settled Bets</div><div class="card-value" id="roi-settled">0</div></div>
-        <div class="card"><div class="card-label">Profit (Settled)</div><div class="card-value" id="roi-profit">€0</div></div>
-        <div class="card"><div class="card-label">Stake (Settled)</div><div class="card-value" id="roi-stake">€0</div></div>
+        <div class="card">
+          <div class="card-label">Overall ROI</div>
+          <div class="card-value" id="roi-overall">0%</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Settled Bets</div>
+          <div class="card-value" id="roi-settled">0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Profit (Settled)</div>
+          <div class="card-value" id="roi-profit">€0</div>
+        </div>
+        <div class="card">
+          <div class="card-label">Stake (Settled)</div>
+          <div class="card-value" id="roi-stake">€0</div>
+        </div>
       </section>
 
       <section class="ledger-section">
@@ -197,6 +241,7 @@
     </div>
   </main>
 
-  <script type="module" src="app.js?v=90"></script>
+  <!-- Load app last -->
+  <script type="module" src="app.js?v=99"></script>
 </body>
 </html>
