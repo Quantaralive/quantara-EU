@@ -6,7 +6,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Quantara app v7 — analytics tidy");
+console.log("Quantara app v8 — monthly P&L");
 
 /* State */
 let bankrolls = [];
@@ -14,13 +14,14 @@ let allBets = [];
 let activeBankrollId = localStorage.getItem("quantara_active_bankroll_id") || null;
 
 let bankrollChart = null,
-    pnlBarChart = null,
     oddsHistChart = null,
     resultsPieChart = null,
     winRateBySportChart = null,
     pnlBySportChart = null,
-    weekdayChart = null;
+    weekdayChart = null,
+    pnlMonthChart = null; // NEW: monthly P&L (replaces daily)
 
+/* Filters */
 let activeMonthKey = null, filterDateISO = null, selectedCalendarISO = null;
 let currentMonth = new Date();
 let editingId = null;
@@ -35,7 +36,7 @@ function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Nu
 function median(arr){ const a=arr.slice().sort((x,y)=>x-y); if(!a.length) return 0; const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
 const baseOpts = ()=>({ responsive:true, maintainAspectRatio:false, resizeDelay:200 });
 
-/* Tab routing */
+/* Tabs */
 function setTab(tab){
   const panes={home:$("tab-home"),overview:$("tab-overview"),analytics:$("tab-analytics"),roi:$("tab-roi"),calendar:$("tab-calendar")};
   const btns ={home:$("tab-btn-home"),overview:$("tab-btn-overview"),analytics:$("tab-btn-analytics"),roi:$("tab-btn-roi"),calendar:$("tab-btn-calendar")};
@@ -48,8 +49,6 @@ function setTab(tab){
   if(tab==="roi") renderROI();
   if(tab==="calendar"){ drawCalendar(); updateDayBox(); }
 }
-
-/* Expose reliable navigation */
 window.__go = function(tab){
   const needActive = (t)=>["overview","analytics","roi","calendar"].includes(t);
   if(needActive(tab) && !getActive()){
@@ -67,7 +66,7 @@ window.__clearActive = ()=>{
   setTab("home"); render();
 };
 
-/* Utils re bankroll */
+/* Utils */
 function getActive(){ return bankrolls.find(b=>b.id===activeBankrollId) || null; }
 function currentBets(){ return allBets.filter(b=>b.bankroll_id === activeBankrollId); }
 
@@ -91,7 +90,6 @@ window.addEventListener("DOMContentLoaded", function(){
   $("btn-clear-active")?.addEventListener("click", window.__clearActive);
 
   $("save-bankroll").addEventListener("click", saveBankrollStart);
-
   $("add-form").addEventListener("submit", addBetSubmit);
 
   $("edit-close").addEventListener("click", closeEdit);
@@ -141,7 +139,7 @@ async function signout(){
   $("signout").style.display="none";
 }
 
-/* Data loaders */
+/* Data */
 async function loadBankrolls(){
   const sess=await supabase.auth.getSession(); const session=sess?.data?.session;
   if(!session){ bankrolls=[]; return; }
@@ -167,7 +165,7 @@ async function loadBets(){
   });
 }
 
-/* Main render */
+/* Render */
 async function render(){
   const sess=await supabase.auth.getSession();
   const session=sess && sess.data ? sess.data.session : null;
@@ -345,15 +343,15 @@ function renderKPIs(){
   $("avg-stake").textContent     = euro(avgStake);
   $("avg-odds").textContent      = avgOdds.toFixed(2);
 
-  // Edge and Kelly (based on overall win rate & avg odds)
+  // Edge & Kelly
   let edgePct = 0, kellyPct = 0;
   if(avgOdds>0 && settled.length>0){
-    const p = winRate;               // observed success rate
-    const b = Math.max(0, avgOdds - 1); // decimal odds -> net multiple
+    const p = winRate;
+    const b = Math.max(0, avgOdds - 1);
     const q = 1 - p;
     const breakeven = 1/avgOdds;
     edgePct = (p - breakeven) * 100;
-    const k = (b>0) ? ( (b*p - q) / b ) : 0; // Kelly fraction
+    const k = (b>0) ? ( (b*p - q) / b ) : 0;
     kellyPct = Math.max(0, k) * 100;
   }
   $("edge").textContent = `${edgePct.toFixed(2)}% / ${kellyPct.toFixed(2)}%`;
@@ -404,7 +402,7 @@ function renderLedger(){
   });
 }
 
-/* Edit / Delete bet */
+/* Edit / Delete */
 function openEdit(id){
   const b=allBets.find(x=>String(x.id)===String(id));
   if(!b){ alert("Bet not found"); return; }
@@ -466,12 +464,9 @@ function drawBankrollChart(){
 /* Analytics */
 function renderAnalytics(){
   const rows=currentBets();
-  const settled=rows.filter(b=>b.result!=="pending" && b.result!=="void");
-  // KPIs are updated in renderKPIs already.
-
   drawPnlBySport(rows);
   drawWinRateBySport(rows);
-  drawPnlBarChart(rows);
+  drawPnlMonthChart(rows);      // ← monthly instead of daily
   drawWeekdayChart(rows);
   drawOddsHistogram(rows);
   drawResultsPie(rows);
@@ -510,16 +505,21 @@ function drawWinRateBySport(rows){
   });
 }
 
-function drawPnlBarChart(rows){
-  const c=$("pnlBarChart"); if(!window.Chart||!c) return;
+function drawPnlMonthChart(rows){
+  const c=$("pnlMonthChart"); if(!window.Chart||!c) return;
   const ctx=c.getContext("2d");
-  const daily=groupByDateSum(rows.map(b=>({date:b.date,pnl:b.profit})));
-  const labels=daily.map(d=>d.date);
-  const values=daily.map(d=>Number(d.pnl.toFixed(2)));
-  if(pnlBarChart){ try{pnlBarChart.destroy();}catch(_){} }
-  pnlBarChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"P&L (€)", data:values }] },
-    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } }
+  const map=new Map();
+  rows.forEach(b=>{ const k=b.date.slice(0,7); map.set(k,(map.get(k)||0)+b.profit); });
+  const labels=Array.from(map.keys()).sort();
+  const values=labels.map(k=>Number((map.get(k)||0).toFixed(2)));
+  if(pnlMonthChart){ try{pnlMonthChart.destroy();}catch(_){} }
+  pnlMonthChart=new Chart(ctx,{ type:"bar",
+    data:{ labels, datasets:[{ label:"Monthly P&L (€)", data:values }] },
+    options:{ ...baseOpts(),
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>euro(c.parsed.y) } } },
+      scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}},
+               y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} }
+    }
   });
 }
 
@@ -560,7 +560,7 @@ function drawResultsPie(rows){
   });
 }
 
-/* Calendar + ROI (unchanged logic) */
+/* Calendar & ROI */
 function drawCalendar(){
   const rows=currentBets();
   const y=currentMonth.getFullYear(), m=currentMonth.getMonth();
