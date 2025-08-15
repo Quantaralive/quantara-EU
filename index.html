@@ -14,11 +14,11 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-  <!-- Inline favicon (prevents 404 on GitHub Pages) -->
+  <!-- Inline favicon -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%237c3aed'/%3E%3C/svg%3E">
 </head>
 <body>
-  <!-- Decorative background -->
+  <!-- BG -->
   <div class="bg"><div class="bg-glow"></div><div class="bg-grid"></div></div>
 
   <!-- Top bar -->
@@ -43,25 +43,46 @@
   <main class="container">
     <!-- Tabs -->
     <div class="tabs">
-      <button id="tab-btn-overview"  class="tab active">Overview</button>
-      <button id="tab-btn-analytics" class="tab">Analytics</button>
-      <button id="tab-btn-roi"       class="tab">ROI</button>
-      <button id="tab-btn-calendar"  class="tab">Calendar</button>
+      <button id="tab-btn-home"     class="tab active">Home</button>
+      <button id="tab-btn-overview" class="tab">Overview</button>
+      <button id="tab-btn-analytics"class="tab">Analytics</button>
+      <button id="tab-btn-roi"      class="tab">ROI</button>
+      <button id="tab-btn-calendar" class="tab">Calendar</button>
     </div>
 
-    <!-- OVERVIEW -->
-    <div id="tab-overview">
+    <!-- HOME: pick/create bankroll -->
+    <div id="tab-home">
+      <section class="cards header-actions">
+        <div class="card span-2">
+          <div class="card-label">Current bankroll</div>
+          <div class="current-bk" id="current-bk">None selected</div>
+          <div class="muted small">Choose a bankroll to work in. You can create multiple bankrolls for different strategies.</div>
+        </div>
+        <div class="card actions-right">
+          <button id="btn-new-bankroll" class="btn btn-primary">New bankroll</button>
+          <button id="btn-clear-active" class="btn btn-ghost">Clear selection</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">Your bankrolls</div>
+        <div id="bankroll-grid" class="bankroll-grid"></div>
+      </section>
+    </div>
+
+    <!-- OVERVIEW (only when a bankroll is selected) -->
+    <div id="tab-overview" class="hidden">
       <section class="cards">
         <div class="card"><div class="card-label">Bankroll</div><div class="card-value" id="bankroll">€0</div></div>
         <div class="card"><div class="card-label">Total staked</div><div class="card-value" id="staked">€0</div></div>
         <div class="card"><div class="card-label">Win rate</div><div class="card-value" id="winrate">0%</div></div>
         <div class="card settings">
-          <div class="card-label">Starting Bankroll (€)</div>
+          <div class="card-label">Starting Bankroll (€) for <span id="bk-name-inline">—</span></div>
           <div class="settings-row">
             <input id="bankroll-start" type="number" step="1" placeholder="10000" />
             <button id="save-bankroll" class="btn btn-primary">Save</button>
           </div>
-          <div class="muted small">Stored locally on your device.</div>
+          <div class="muted small">Saved in Supabase, tied to this bankroll.</div>
         </div>
       </section>
 
@@ -74,7 +95,7 @@
 
       <section class="entry">
         <form id="add-form" class="add-form">
-          <div class="form-title">Add bet</div>
+          <div class="form-title">Add bet to <span id="bk-name-inline-2">—</span></div>
           <input type="date" id="f-date" required />
           <input type="text" id="f-sport" placeholder="Football" required />
           <input type="text" id="f-league" placeholder="Serie A" />
@@ -118,8 +139,6 @@
         <div class="card"><div class="card-label">Total bets</div><div class="card-value" id="bets-total">0</div></div>
         <div class="card"><div class="card-label">Pending</div><div class="card-value" id="bets-pending">0</div></div>
       </section>
-
-      <!-- Extra analytics KPIs -->
       <section class="cards" style="margin-top:12px;">
         <div class="card"><div class="card-label">Profit factor</div><div class="card-value" id="pf">0.00</div></div>
         <div class="card"><div class="card-label">Avg stake</div><div class="card-value" id="avg-stake">€0</div></div>
@@ -163,7 +182,6 @@
         <div class="card"><div class="card-label">Profit (Settled)</div><div class="card-value" id="roi-profit">€0</div></div>
         <div class="card"><div class="card-label">Stake (Settled)</div><div class="card-value" id="roi-stake">€0</div></div>
       </section>
-
       <section class="ledger-section">
         <div class="section-title">ROI by sport</div>
         <div class="table-wrap">
@@ -221,7 +239,7 @@
     </div>
   </main>
 
-  <!-- EDIT MODAL -->
+  <!-- EDIT BET MODAL -->
   <div id="edit-modal" class="modal hidden">
     <div class="modal-content">
       <div class="modal-header">
@@ -251,7 +269,25 @@
     </div>
   </div>
 
-  <!-- IMPORTANT: v4 to bust cache -->
-  <script type="module" src="app.js?v=4"></script>
+  <!-- NEW BANKROLL MODAL -->
+  <div id="bk-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">New bankroll</div>
+        <button id="bk-close" class="btn btn-ghost">×</button>
+      </div>
+      <form id="bk-form" class="edit-form">
+        <input type="text" id="bk-name" placeholder="e.g. Serie A Strategy" required />
+        <input type="number" step="1" id="bk-start" placeholder="Starting € e.g. 5000" required />
+        <div class="edit-actions">
+          <button type="button" id="bk-cancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- IMPORTANT: v5 to bust cache -->
+  <script type="module" src="app.js?v=5"></script>
 </body>
 </html>
