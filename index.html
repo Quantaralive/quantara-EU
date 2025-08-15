@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-  <!-- Inline favicon -->
+  <!-- Inline favicon (prevents 404) -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%237c3aed'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -95,7 +95,8 @@
             <thead>
               <tr>
                 <th>Date</th><th>Sport</th><th>League</th><th>Market</th>
-                <th>Selection</th><th>Odds</th><th>Stake</th><th>Result</th><th>Profit</th><th class="right">Actions</th>
+                <th>Selection</th><th>Odds</th><th>Stake</th><th>Result</th><th>Profit</th>
+                <th class="right">Actions</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -113,7 +114,7 @@
         <div class="card"><div class="card-label">Pending</div><div class="card-value" id="bets-pending">0</div></div>
       </section>
 
-      <!-- New analytics KPIs -->
+      <!-- extra analytics KPIs -->
       <section class="cards" style="margin-top:12px;">
         <div class="card"><div class="card-label">Profit factor</div><div class="card-value" id="pf">0.00</div></div>
         <div class="card"><div class="card-label">Avg stake</div><div class="card-value" id="avg-stake">€0</div></div>
@@ -138,8 +139,6 @@
           <div class="chart-title">Results breakdown</div>
           <canvas id="resultsPieChart"></canvas>
         </div>
-
-        <!-- New charts -->
         <div class="chart-card">
           <div class="chart-title">P&L by month</div>
           <canvas id="pnlMonthChart"></canvas>
@@ -247,6 +246,6 @@
     </div>
   </div>
 
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 </html>
