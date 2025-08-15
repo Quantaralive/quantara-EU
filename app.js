@@ -6,7 +6,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Quantara app v3");
+console.log("Quantara app v4");
 
 /* State */
 let bankrollStart = Number(localStorage.getItem("quantara_bankroll_start") || "10000");
@@ -26,9 +26,9 @@ let currentMonth = new Date();
 let editingId = null;
 
 /* Helpers */
-function $(id){ return document.getElementById(id); }
-function q(sel){ return document.querySelector(sel); }
-function euro(n){ const v=Number(n||0); return new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(v); }
+const $ = (id)=>document.getElementById(id);
+const q = (sel)=>document.querySelector(sel);
+const euro=(n)=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"}).format(Number(n||0));
 function euroShort(n){ const v=Number(n||0), s=v<0?"-":"", a=Math.abs(v); return a>=1000 ? s+"€"+(a/1000).toFixed(1)+"k" : s+"€"+a.toFixed(0); }
 function emptyNull(id){ const el=$(id); const v=el?String(el.value||"").trim():""; return v===""?null:v; }
 function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Number(p[1])-1, 1); return d.toLocaleString(undefined,{month:"long",year:"numeric"}); }
@@ -99,11 +99,11 @@ window.addEventListener("DOMContentLoaded", function(){
     const payload={
       event_date:$("f-date").value?new Date($("f-date").value).toISOString():new Date().toISOString(),
       sport:$("f-sport").value||"Football",
-      league:emptyNull("f-league"),
-      market:emptyNull("f-market"),
-      selection:emptyNull("f-selection"),
-      odds:parseFloat($("f-odds").value||"1.80"),
-      stake:parseFloat($("f-stake").value||"100"),
+      league: emptyNull("f-league"),
+      market: emptyNull("f-market"),
+      selection: emptyNull("f-selection"),
+      odds: parseFloat($("f-odds").value||"1.80"),
+      stake: parseFloat($("f-stake").value||"100"),
       result:$("f-result").value,
       notes:null
     };
@@ -113,20 +113,11 @@ window.addEventListener("DOMContentLoaded", function(){
     await render();
   });
 
-  // Ledger actions
-  q("#ledger tbody").addEventListener("click", function(ev){
-    const btn=ev.target.closest(".action-btn");
-    if(!btn) return;
-    const id=btn.getAttribute("data-id");
-    const action=btn.getAttribute("data-action");
-    if(action==="edit") openEdit(id);
-    if(action==="delete") deleteBet(id);
-  });
+  // Expose global handlers for reliable clicks
+  window.__edit = (id)=>openEdit(id);
+  window.__del  = (id)=>deleteBet(id);
 
-  // Edit modal controls
-  $("edit-close").addEventListener("click", closeEdit);
-  $("edit-cancel").addEventListener("click", closeEdit);
-  $("edit-form").addEventListener("submit", onEditSubmit);
+  // (We keep no tbody listener now — inline onclick is simpler & robust)
 
   // Calendar controls
   $("cal-prev").addEventListener("click", ()=>{ currentMonth.setMonth(currentMonth.getMonth()-1); drawCalendar(); });
@@ -150,7 +141,12 @@ async function render(){
 
   await supabase.from("profiles").upsert({ id: session.user.id });
 
-  const res=await supabase.from("bets_enriched").select("*").order("event_date",{ascending:true});
+  // IMPORTANT: read directly from bets so we always get real IDs
+  const res=await supabase
+    .from("bets")
+    .select("id,event_date,sport,league,market,selection,odds,stake,result")
+    .order("event_date",{ascending:true});
+
   if(res.error){ alert(res.error.message); return; }
 
   allBets=(res.data||[]).map(r=>{
@@ -209,7 +205,7 @@ function buildMonthTabs(){
   });
 }
 
-/* Ledger table with actions */
+/* Ledger table with inline actions */
 function renderLedger(){
   const tbody=q("#ledger tbody"); tbody.innerHTML="";
   let rows=allBets.slice();
@@ -225,8 +221,8 @@ function renderLedger(){
       "<td class='right'>€"+b.stake.toFixed(2)+"</td><td class='right'>"+b.result+"</td>"+
       "<td class='right "+cls+"'>€"+b.profit.toFixed(2)+"</td>"+
       "<td class='right actions'>"+
-        "<button class='action-btn action-edit' data-action='edit' data-id='"+b.id+"'>Edit</button>"+
-        "<button class='action-btn action-del' data-action='delete' data-id='"+b.id+"'>Delete</button>"+
+        "<button class='action-btn action-edit' onclick='window.__edit("+JSON.stringify(b.id)+")'>Edit</button>"+
+        "<button class='action-btn action-del'  onclick='window.__del("+JSON.stringify(b.id)+")'>Delete</button>"+
       "</td>";
     tbody.appendChild(tr);
   });
@@ -255,29 +251,27 @@ async function onEditSubmit(e){
   const payload={
     event_date:$("e-date").value?new Date($("e-date").value).toISOString():new Date().toISOString(),
     sport:$("e-sport").value||"Football",
-    league:emptyNull("e-league"),
-    market:emptyNull("e-market"),
-    selection:emptyNull("e-selection"),
-    odds:parseFloat($("e-odds").value||"1.80"),
-    stake:parseFloat($("e-stake").value||"100"),
+    league: emptyNull("e-league"),
+    market: emptyNull("e-market"),
+    selection: emptyNull("e-selection"),
+    odds: parseFloat($("e-odds").value||"1.80"),
+    stake: parseFloat($("e-stake").value||"100"),
     result:$("e-result").value
   };
   const upd=await supabase.from("bets").update(payload).eq("id", editingId);
-  if(upd.error){ alert("Update failed: "+upd.error.message); return; }
+  if(upd.error){ console.error(upd.error); alert("Update failed: "+upd.error.message); return; }
   closeEdit();
   await render();
 }
 async function deleteBet(id){
   if(!confirm("Delete this bet?")) return;
   const del=await supabase.from("bets").delete().eq("id", id);
-  if(del.error){ alert("Delete failed: "+del.error.message); return; }
+  if(del.error){ console.error(del.error); alert("Delete failed: "+del.error.message); return; }
   await render();
 }
 
-/* Charts base opts */
-function baseOpts(){ return {
-  responsive:true, maintainAspectRatio:false, resizeDelay:200
-}; }
+/* Charts shared opts */
+const baseOpts = ()=>({ responsive:true, maintainAspectRatio:false, resizeDelay:200 });
 
 /* Charts */
 function drawBankrollChart(){
@@ -313,17 +307,15 @@ function renderAnalytics(){
   const medOdds=median(settled.map(b=>b.odds));
   $("median-odds").textContent=medOdds.toFixed(2);
 
-  const seq=settled.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>b.result);
   let lw=0,ll=0,cw=0,cl=0;
-  seq.forEach(r=>{ if(r==="win"){ cw++; cl=0; lw=Math.max(lw,cw);} else if(r==="loss"){ cl++; cw=0; ll=Math.max(ll,cl);} else { cw=0; cl=0; } });
+  settled.slice().sort((a,b)=>a.date.localeCompare(b.date)).forEach(b=>{
+    if(b.result==="win"){ cw++; cl=0; lw=Math.max(lw,cw); }
+    else if(b.result==="loss"){ cl++; cw=0; ll=Math.max(ll,cl); }
+    else { cw=0; cl=0; }
+  });
   $("streaks").textContent=lw+" / "+ll;
 
-  drawAnalyticsStakeChart();
-  drawPnlBarChart();
-  drawOddsHistogram();
-  drawResultsPie();
-  drawPnlMonthChart();
-  drawWinRateBySportChart();
+  drawAnalyticsStakeChart(); drawPnlBarChart(); drawOddsHistogram(); drawResultsPie(); drawPnlMonthChart(); drawWinRateBySportChart();
 }
 function drawAnalyticsStakeChart(){
   const c=$("analyticsStakeChart"); if(!window.Chart||!c) return;
@@ -333,7 +325,7 @@ function drawAnalyticsStakeChart(){
   if(analyticsStakeChart){ try{analyticsStakeChart.destroy();}catch(_){} }
   analyticsStakeChart=new Chart(ctx,{ type:"doughnut",
     data:{ labels, datasets:[{ data:values, borderWidth:1, borderColor:"#0d1524", backgroundColor:["#22d3ee","#7c3aed","#34d399","#f472b6","#fde047","#f97316"] }] },
-    options:{ ...baseOpts(), cutout:"70%", plugins:{ legend:{ labels:{ color:"#e7eefc" } } } }
+    options:{ ...baseOpts(), cutout:"70%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } }
   });
 }
 function drawPnlBarChart(){
@@ -367,7 +359,7 @@ function drawResultsPie(){
   if(resultsPieChart){ try{resultsPieChart.destroy();}catch(_){} }
   resultsPieChart=new Chart(ctx,{ type:"doughnut",
     data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void], backgroundColor:["#22c55e","#ef4444","#7c3aed","#64748b"], borderWidth:1, borderColor:"#0d1524" }] },
-    options:{ ...baseOpts(), cutout:"65%", plugins:{ legend:{ labels:{ color:"#e7eefc" } } } }
+    options:{ ...baseOpts(), cutout:"65%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } }
   });
 }
 function drawPnlMonthChart(){
@@ -403,7 +395,6 @@ function drawCalendar(){
   $("cal-title").textContent=currentMonth.toLocaleString(undefined,{month:"long",year:"numeric"});
   const sums=new Map(), counts=new Map();
   allBets.forEach(b=>{ sums.set(b.date,(sums.get(b.date)||0)+b.profit); counts.set(b.date,(counts.get(b.date)||0)+1); });
-
   const first=new Date(y,m,1), start=new Date(first); start.setDate(first.getDate()-first.getDay());
   const grid=$("calendar-grid"); grid.innerHTML="";
   for(let i=0;i<42;i++){
