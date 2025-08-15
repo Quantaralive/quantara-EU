@@ -6,7 +6,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Quantara app v8 — monthly P&L");
+console.log("Quantara app v9 — monthly P&L fix");
 
 /* State */
 let bankrolls = [];
@@ -19,7 +19,7 @@ let bankrollChart = null,
     winRateBySportChart = null,
     pnlBySportChart = null,
     weekdayChart = null,
-    pnlMonthChart = null; // NEW: monthly P&L (replaces daily)
+    pnlMonthChart = null;
 
 /* Filters */
 let activeMonthKey = null, filterDateISO = null, selectedCalendarISO = null;
@@ -33,7 +33,6 @@ const euro=(n)=>new Intl.NumberFormat("it-IT",{style:"currency",currency:"EUR"})
 function euroShort(n){ const v=Number(n||0), s=v<0?"-":"", a=Math.abs(v); return a>=1000 ? s+"€"+(a/1000).toFixed(1)+"k" : s+"€"+a.toFixed(0); }
 function emptyNull(id){ const el=$(id); const v=el?String(el.value||"").trim():""; return v===""?null:v; }
 function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Number(p[1])-1, 1); return d.toLocaleString(undefined,{month:"long",year:"numeric"}); }
-function median(arr){ const a=arr.slice().sort((x,y)=>x-y); if(!a.length) return 0; const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
 const baseOpts = ()=>({ responsive:true, maintainAspectRatio:false, resizeDelay:200 });
 
 /* Tabs */
@@ -466,7 +465,7 @@ function renderAnalytics(){
   const rows=currentBets();
   drawPnlBySport(rows);
   drawWinRateBySport(rows);
-  drawPnlMonthChart(rows);      // ← monthly instead of daily
+  drawPnlMonthChart(rows); // monthly
   drawWeekdayChart(rows);
   drawOddsHistogram(rows);
   drawResultsPie(rows);
@@ -481,7 +480,7 @@ function drawPnlBySport(rows){
   const values=labels.map(s=>Number((map.get(s)||0).toFixed(2)));
   if(pnlBySportChart){ try{pnlBySportChart.destroy();}catch(_){} }
   pnlBySportChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"P&L (€)", data:values }] },
+    data:{ labels, datasets:[{ label:"P&L (€)", data:values, backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
     options:{ ...baseOpts(),
       indexAxis:"y",
       plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>euro(c.parsed.x) } } },
@@ -500,25 +499,44 @@ function drawWinRateBySport(rows){
   const values=labels.map(s=>{ const r=bySport.get(s); return r.t?(r.w/r.t*100):0; });
   if(winRateBySportChart){ try{winRateBySportChart.destroy();}catch(_){} }
   winRateBySportChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"Win rate %", data:values }] },
+    data:{ labels, datasets:[{ label:"Win rate %", data:values, backgroundColor:"rgba(34,211,238,0.5)", borderColor:"#22d3ee" }] },
     options:{ ...baseOpts(), plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>c.parsed.y.toFixed(1)+"%" } } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, suggestedMin:0, suggestedMax:100} } }
   });
 }
 
+/* Monthly P&L (fixed to always show) */
 function drawPnlMonthChart(rows){
   const c=$("pnlMonthChart"); if(!window.Chart||!c) return;
   const ctx=c.getContext("2d");
+
   const map=new Map();
   rows.forEach(b=>{ const k=b.date.slice(0,7); map.set(k,(map.get(k)||0)+b.profit); });
+
   const labels=Array.from(map.keys()).sort();
   const values=labels.map(k=>Number((map.get(k)||0).toFixed(2)));
+
   if(pnlMonthChart){ try{pnlMonthChart.destroy();}catch(_){} }
+
+  if(labels.length===0){
+    pnlMonthChart=new Chart(ctx,{ type:"bar",
+      data:{ labels:["—"], datasets:[{ label:"Monthly P&L (€)", data:[0], backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
+      options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, suggestedMax:1, ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"} }, x:{ ticks:{color:"#93a0b7"}, grid:{display:false} } } }
+    });
+    return;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = Math.max(1, Math.round((Math.abs(max - min) || 1) * 0.2));
+  const suggestedMin = Math.min(0, min - pad);
+  const suggestedMax = Math.max(1, max + pad);
+
   pnlMonthChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"Monthly P&L (€)", data:values }] },
+    data:{ labels, datasets:[{ label:"Monthly P&L (€)", data:values, backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
     options:{ ...baseOpts(),
       plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>euro(c.parsed.y) } } },
       scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}},
-               y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} }
+               y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, suggestedMin, suggestedMax} }
     }
   });
 }
@@ -531,7 +549,7 @@ function drawWeekdayChart(rows){
   rows.forEach(b=>{ const d=new Date(b.date); sums[d.getDay()]+=b.profit; });
   if(weekdayChart){ try{weekdayChart.destroy();}catch(_){} }
   weekdayChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"P&L (€)", data:sums.map(x=>Number(x.toFixed(2))) }] },
+    data:{ labels, datasets:[{ label:"P&L (€)", data:sums.map(x=>Number(x.toFixed(2))), backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
     options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } }
   });
 }
@@ -544,7 +562,7 @@ function drawOddsHistogram(rows){
   const counts=bins.map(r=>{ const lo=r[0], hi=r[1]; return rows.filter(b=>b.odds>=lo && b.odds<(hi||1e9)).length; });
   if(oddsHistChart){ try{oddsHistChart.destroy();}catch(_){} }
   oddsHistChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"Bets", data:counts }] },
+    data:{ labels, datasets:[{ label:"Bets", data:counts, backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
     options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, beginAtZero:true, precision:0} } }
   });
 }
@@ -555,7 +573,7 @@ function drawResultsPie(rows){
   const counts={win:0,loss:0,pending:0,void:0}; rows.forEach(b=>{ counts[b.result]=(counts[b.result]||0)+1; });
   if(resultsPieChart){ try{resultsPieChart.destroy();}catch(_){} }
   resultsPieChart=new Chart(ctx,{ type:"doughnut",
-    data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void] }] },
+    data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void], backgroundColor:["#16a34a","#ef4444","#64748b","#9333ea"] }] },
     options:{ ...baseOpts(), cutout:"65%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } }
   });
 }
@@ -620,11 +638,6 @@ function renderROI(){
 }
 
 /* Utils */
-function groupByDateSum(items){
-  const map=new Map();
-  items.forEach(it=>{ map.set(it.date,(map.get(it.date)||0)+Number(it.pnl||0)); });
-  return Array.from(map.entries()).sort((a,b)=>a[0].localeCompare(b[0])).map(e=>({date:e[0], pnl:e[1]}));
-}
 function computeMaxDrawdown(rows){
   const sorted=rows.slice().sort((a,b)=>a.date.localeCompare(b.date));
   const startAmt=getActive()?.start_amount||0;
