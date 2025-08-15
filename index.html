@@ -43,11 +43,11 @@
   <main class="container">
     <!-- Tabs -->
     <div class="tabs">
-      <button id="tab-btn-home"     class="tab active">Home</button>
-      <button id="tab-btn-overview" class="tab">Overview</button>
-      <button id="tab-btn-analytics"class="tab">Analytics</button>
-      <button id="tab-btn-roi"      class="tab">ROI</button>
-      <button id="tab-btn-calendar" class="tab">Calendar</button>
+      <button id="tab-btn-home"      class="tab active" onclick="window.__go('home')">Home</button>
+      <button id="tab-btn-overview"  class="tab" onclick="window.__go('overview')">Overview</button>
+      <button id="tab-btn-analytics" class="tab" onclick="window.__go('analytics')">Analytics</button>
+      <button id="tab-btn-roi"       class="tab" onclick="window.__go('roi')">ROI</button>
+      <button id="tab-btn-calendar"  class="tab" onclick="window.__go('calendar')">Calendar</button>
     </div>
 
     <!-- HOME: pick/create bankroll -->
@@ -59,8 +59,8 @@
           <div class="muted small">Choose a bankroll to work in. You can create multiple bankrolls for different strategies.</div>
         </div>
         <div class="card actions-right">
-          <button id="btn-new-bankroll" class="btn btn-primary">New bankroll</button>
-          <button id="btn-clear-active" class="btn btn-ghost">Clear selection</button>
+          <button id="btn-new-bankroll" class="btn btn-primary" onclick="window.__openBkModal()">New bankroll</button>
+          <button id="btn-clear-active" class="btn btn-ghost" onclick="window.__clearActive()">Clear selection</button>
         </div>
       </section>
 
@@ -70,7 +70,7 @@
       </section>
     </div>
 
-    <!-- OVERVIEW (only when a bankroll is selected) -->
+    <!-- OVERVIEW -->
     <div id="tab-overview" class="hidden">
       <section class="cards">
         <div class="card"><div class="card-label">Bankroll</div><div class="card-value" id="bankroll">€0</div></div>
@@ -287,7 +287,7 @@
     </div>
   </div>
 
-  <!-- IMPORTANT: v5 to bust cache -->
-  <script type="module" src="app.js?v=5"></script>
+  <!-- v6 to bust cache -->
+  <script type="module" src="app.js?v=6"></script>
 </body>
 </html>
