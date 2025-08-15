@@ -62,12 +62,11 @@ body{ margin:0; font-family:"Outfit",system-ui,Segoe UI,Roboto,Arial,sans-serif;
 .chart-title{ color:var(--muted); font-size:13px; margin-bottom:6px; }
 .chart-card canvas{ display:block; width:100% !important; height:100% !important; }
 
-/* Analytics */
-.analytics-charts{ display:grid; gap:12px; margin-top:16px; grid-template-columns:1fr 1fr; }
-.analytics-charts .chart-card{ height:260px; }
-.analytics-charts .span-2{ grid-column: span 2; height:380px; }
-.donut-wrap-lg{ width:420px; height:360px; margin:6px auto 2px; position:relative; }
-.donut-wrap-lg canvas{ width:100% !important; height:100% !important; display:block; }
+/* Analytics (tidy) */
+.analytics-charts{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:16px; }
+.analytics-charts.tidy .chart-card{ height:260px; }
+.analytics-charts .span-2{ grid-column: span 2; }
+.analytics-charts .tall{ height:360px; }
 
 /* Add form */
 .entry{ margin-top:16px; }
@@ -131,8 +130,8 @@ td.actions{ white-space:nowrap; }
 @media (max-width: 1150px){ .cards{ grid-template-columns:1fr 1fr; } .header-actions .span-2{ grid-column:span 2; } }
 @media (max-width: 900px){
   .analytics-charts{ grid-template-columns:1fr; }
-  .analytics-charts .span-2{ grid-column:auto; height:320px; }
-  .donut-wrap-lg{ width:320px; height:300px; }
+  .analytics-charts .span-2{ grid-column:auto; }
+  .analytics-charts .tall{ height:320px; }
   .chart-card{ height:280px; }
   .edit-form{ grid-template-columns:1fr 1fr; }
   .edit-actions{ grid-column:1/-1; }
