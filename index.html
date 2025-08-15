@@ -14,7 +14,7 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-  <!-- Inline favicon (purple dot) -->
+  <!-- Tiny inline favicon -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%237c3aed'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -243,103 +243,180 @@
 
     <!-- TOOLS -->
     <div id="tab-tools" class="hidden">
-      <div class="section-title">Betting tools</div>
-      <div class="tabs subtabs">
-        <button id="tool-btn-risk" class="tab small active">Risk</button>
-        <button id="tool-btn-poisson" class="tab small">Poisson</button>
-        <button id="tool-btn-masa" class="tab small">Masaniello</button>
-      </div>
+      <section class="tools-nav">
+        <button id="tool-btn-risk" class="chip active">Risk</button>
+        <button id="tool-btn-poisson" class="chip">Poisson</button>
+        <button id="tool-btn-masa" class="chip">Masaniello</button>
+      </section>
 
-      <!-- Risk -->
-      <section id="tools-risk">
-        <div class="cards">
-          <div class="card span-2">
-            <div class="form-title">Risk / Kelly</div>
-            <div class="form-grid">
-              <label>Bankroll (€)<input id="rk-bankroll" type="number" step="1" placeholder="5000" value="5000"></label>
-              <label>Odds (decimal)<input id="rk-odds" type="number" step="0.01" placeholder="1.85" value="1.85"></label>
-              <label>Win probability %<input id="rk-prob" type="number" step="0.1" placeholder="55" value="55"></label>
-              <label>Kelly cap %<input id="rk-cap" type="number" step="0.1" placeholder="25" value="25"></label>
+      <!-- Risk panel -->
+      <section id="tools-risk" class="cards">
+        <div class="card span-2">
+          <div class="grid-2">
+            <div class="input-group">
+              <label>Bankroll (€)</label>
+              <input id="rk-bankroll" type="number" step="1" value="10000" />
             </div>
-            <div class="actions-right" style="margin-top:8px">
-              <button id="rk-run" class="btn btn-primary">Run</button>
+            <div class="input-group">
+              <label>Odds</label>
+              <input id="rk-odds" type="number" step="0.01" value="1.85" />
+            </div>
+            <div class="input-group col-span-2">
+              <label>Win probability</label>
+              <div class="slider-row">
+                <input id="rk-prob" type="number" step="0.1" value="55" />
+                <input id="rk-prob-range" type="range" min="0" max="100" step="0.1" value="55" />
+              </div>
+            </div>
+            <div class="input-group col-span-2">
+              <label>Kelly cap (max % bankroll per bet)</label>
+              <div class="slider-row">
+                <input id="rk-cap" type="number" step="0.1" value="3" />
+                <input id="rk-cap-range" type="range" min="0" max="10" step="0.1" value="3" />
+              </div>
             </div>
           </div>
-          <div class="card"><div class="card-label">Breakeven</div><div class="card-value" id="rk-be">—</div></div>
-          <div class="card"><div class="card-label">Edge</div><div class="card-value" id="rk-edge">—</div></div>
-          <div class="card"><div class="card-label">EV per €1</div><div class="card-value" id="rk-ev">—</div></div>
-          <div class="card"><div class="card-label">Kelly fraction</div><div class="card-value" id="rk-kelly">—</div></div>
+          <div class="btn-row">
+            <button id="rk-run" class="btn btn-primary">Compute</button>
+          </div>
         </div>
 
-        <div class="cards" style="margin-top:12px">
-          <div class="card"><div class="card-label">Flat 1%</div><div class="card-value" id="rk-flat1">—</div></div>
-          <div class="card"><div class="card-label">Flat 2%</div><div class="card-value" id="rk-flat2">—</div></div>
-          <div class="card"><div class="card-label">Flat 3%</div><div class="card-value" id="rk-flat3">—</div></div>
-          <div class="card"><div class="card-label">Half-Kelly</div><div class="card-value" id="rk-half">—</div></div>
-          <div class="card"><div class="card-label">Capped Kelly</div><div class="card-value" id="rk-capval">—</div></div>
+        <div class="card">
+          <div class="grid-2 small-kpis">
+            <div><div class="muted">Breakeven</div><div id="rk-be" class="kpi">0%</div></div>
+            <div><div class="muted">Edge</div><div id="rk-edge" class="kpi">0%</div></div>
+            <div><div class="muted">EV per €1</div><div id="rk-ev" class="kpi">€0</div></div>
+            <div><div class="muted">Kelly (full)</div><div id="rk-kelly" class="kpi">0%</div></div>
+          </div>
+        </div>
+
+        <div class="chart-card span-2">
+          <div class="chart-title">Suggested stakes</div>
+          <canvas id="rkStakeChart"></canvas>
         </div>
       </section>
 
-      <!-- Poisson -->
+      <!-- Poisson panel -->
       <section id="tools-poisson" class="hidden">
         <div class="cards">
-          <div class="card span-2">
-            <div class="form-title">Poisson match model (quick)</div>
-            <div class="form-grid">
-              <label>Expected goals — Home λ<input id="ps-home" type="number" step="0.01" placeholder="1.6" value="1.6"></label>
-              <label>Expected goals — Away λ<input id="ps-away" type="number" step="0.01" placeholder="1.1" value="1.1"></label>
-              <label>O/U line<input id="ps-ouline" type="number" step="0.5" placeholder="2.5" value="2.5"></label>
+          <div class="card">
+            <div class="card-label">Poisson match model (quick)</div>
+            <div class="grid-2">
+              <div class="input-group">
+                <label>Expected goals — Home λ</label>
+                <input id="ps-home" type="number" step="0.01" value="1.6" />
+              </div>
+              <div class="input-group">
+                <label>Expected goals — Away λ</label>
+                <input id="ps-away" type="number" step="0.01" value="1.1" />
+              </div>
+              <div class="input-group">
+                <label>O/U line</label>
+                <input id="ps-ouline" type="number" step="0.5" value="2.5" />
+              </div>
             </div>
-            <div class="actions-right" style="margin-top:8px">
+            <div class="btn-row">
               <button id="ps-run" class="btn btn-primary">Compute</button>
             </div>
           </div>
-          <div class="card"><div class="card-label">Home</div><div class="card-value" id="ps-ph">—</div></div>
-          <div class="card"><div class="card-label">Draw</div><div class="card-value" id="ps-pd">—</div></div>
-          <div class="card"><div class="card-label">Away</div><div class="card-value" id="ps-pa">—</div></div>
-          <div class="card"><div class="card-label">Over</div><div class="card-value" id="ps-over">—</div></div>
-          <div class="card"><div class="card-label">BTTS Yes</div><div class="card-value" id="ps-btts">—</div></div>
-        </div>
 
-        <div class="table-wrap" style="margin-top:12px">
-          <table>
-            <thead>
-              <tr>
-                <th>Market</th><th class="right">Prob.</th><th class="right">Fair odds</th>
-              </tr>
-            </thead>
-            <tbody id="ps-table"></tbody>
-          </table>
+          <div class="card kpi-3">
+            <div><div class="muted">Home</div><div id="ps-ph" class="kpi">0%</div></div>
+            <div><div class="muted">Draw</div><div id="ps-pd" class="kpi">0%</div></div>
+            <div><div class="muted">Away</div><div id="ps-pa" class="kpi">0%</div></div>
+          </div>
+
+          <div class="card kpi-2">
+            <div><div class="muted">Over</div><div id="ps-over" class="kpi">0%</div></div>
+            <div><div class="muted">BTTS Yes</div><div id="ps-btts" class="kpi">0%</div></div>
+          </div>
+
+          <div class="chart-grid">
+            <div class="chart-card">
+              <div class="chart-title">1X2 probabilities</div>
+              <canvas id="ps1x2Chart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Total goals distribution</div>
+              <canvas id="psGoalsChart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">BTTS</div>
+              <canvas id="psBttsChart"></canvas>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Market</th><th class="right">Prob.</th><th class="right">Fair odds</th></tr></thead>
+              <tbody id="ps-table"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 
-      <!-- Masaniello -->
+      <!-- Masaniello panel -->
       <section id="tools-masa" class="hidden">
         <div class="cards">
-          <div class="card span-2">
-            <div class="form-title">Masaniello helper (target-based)</div>
-            <div class="form-grid">
-              <label>Current capital (€)<input id="ms-capital" type="number" step="1" placeholder="1000" value="1000"></label>
-              <label>Target profit (€)<input id="ms-target" type="number" step="1" placeholder="200" value="200"></label>
-              <label>Decimal odds (const.)<input id="ms-odds" type="number" step="0.01" placeholder="1.85" value="1.85"></label>
-              <label>Total bets N<input id="ms-n" type="number" step="1" placeholder="10" value="10"></label>
-              <label>Success probability % (est.)<input id="ms-p" type="number" step="0.1" placeholder="55" value="55"></label>
-              <label>Wins so far<input id="ms-wins" type="number" step="1" placeholder="0" value="0"></label>
+          <div class="card">
+            <div class="card-label">Masaniello sequence</div>
+            <div class="grid-3">
+              <div class="input-group">
+                <label>System name</label>
+                <input id="ms-name" type="text" placeholder="My System" />
+              </div>
+              <div class="input-group">
+                <label>Capital (€)</label>
+                <input id="ms-capital" type="number" step="1" value="1000" />
+              </div>
+              <div class="input-group">
+                <label>Target profit (€)</label>
+                <input id="ms-target" type="number" step="1" value="100" />
+              </div>
+              <div class="input-group">
+                <label>Odds</label>
+                <input id="ms-odds" type="number" step="0.01" value="1.85" />
+              </div>
+              <div class="input-group">
+                <label>Number of bets</label>
+                <input id="ms-n" type="number" step="1" value="10" />
+              </div>
+              <div class="input-group col-span-3">
+                <label>Win probability</label>
+                <div class="slider-row">
+                  <input id="ms-p" type="number" step="0.1" value="55" />
+                  <input id="ms-p-range" type="range" min="0" max="100" step="0.1" value="55" />
+                </div>
+              </div>
+              <div class="input-group">
+                <label>Wins already done</label>
+                <input id="ms-wins" type="number" step="1" value="0" />
+              </div>
             </div>
-            <div class="actions-right" style="margin-top:8px">
-              <button id="ms-run" class="btn btn-primary">Next stake</button>
+            <div class="btn-row">
+              <button id="ms-run" class="btn btn-primary">Start / Recompute</button>
+              <button id="ms-save" class="btn btn-ghost">Save</button>
+              <select id="ms-load" class="btn">
+                <option value="">Load saved…</option>
+              </select>
+              <button id="ms-delete" class="btn btn-ghost">Delete saved</button>
             </div>
           </div>
-          <div class="card"><div class="card-label">Required wins (q)</div><div class="card-value" id="ms-q">—</div></div>
-          <div class="card"><div class="card-label">Remaining wins</div><div class="card-value" id="ms-rem">—</div></div>
-          <div class="card"><div class="card-label">Stake now</div><div class="card-value" id="ms-stake">—</div></div>
-          <div class="card"><div class="card-label">If win → capital</div><div class="card-value" id="ms-nextwin">—</div></div>
-          <div class="card"><div class="card-label">If loss → capital</div><div class="card-value" id="ms-nextloss">—</div></div>
-        </div>
 
-        <div class="muted small" style="margin-top:8px">
-          Recipe: choose a target and expected hit-rate. At each step, stake = (TargetCapital − CurrentCapital) / ((odds − 1) × remaining required wins).
-          This is a practical Masaniello-style guide; adjust after each result.
+          <div class="card small-kpis">
+            <div><div class="muted">Required wins</div><div id="ms-q" class="kpi">—</div></div>
+            <div><div class="muted">Remaining</div><div id="ms-rem" class="kpi">—</div></div>
+            <div><div class="muted">Next stake</div><div id="ms-stake" class="kpi">—</div></div>
+            <div><div class="muted">Capital if WIN</div><div id="ms-nextwin" class="kpi">—</div></div>
+            <div><div class="muted">Capital if LOSS</div><div id="ms-nextloss" class="kpi">—</div></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th class="right">Stake</th><th class="right">Result</th><th class="right">Capital</th><th class="right">Action</th></tr></thead>
+              <tbody id="ms-rows"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>
@@ -393,7 +470,7 @@
     </div>
   </div>
 
-  <!-- v10 to bust cache -->
-  <script type="module" src="app.js?v=10"></script>
+  <!-- Script -->
+  <script type="module" src="app.js?v=14"></script>
 </body>
 </html>
