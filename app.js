@@ -6,7 +6,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Quantara app v9 — monthly P&L fix");
+console.log("Quantara app v10 — Tools tab");
 
 /* State */
 let bankrolls = [];
@@ -34,19 +34,37 @@ function euroShort(n){ const v=Number(n||0), s=v<0?"-":"", a=Math.abs(v); return
 function emptyNull(id){ const el=$(id); const v=el?String(el.value||"").trim():""; return v===""?null:v; }
 function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Number(p[1])-1, 1); return d.toLocaleString(undefined,{month:"long",year:"numeric"}); }
 const baseOpts = ()=>({ responsive:true, maintainAspectRatio:false, resizeDelay:200 });
+const clamp=(n,min,max)=>Math.min(max,Math.max(min,n));
+const fmtPct=(x)=> (Number(x)*100).toFixed(2)+"%";
 
 /* Tabs */
 function setTab(tab){
-  const panes={home:$("tab-home"),overview:$("tab-overview"),analytics:$("tab-analytics"),roi:$("tab-roi"),calendar:$("tab-calendar")};
-  const btns ={home:$("tab-btn-home"),overview:$("tab-btn-overview"),analytics:$("tab-btn-analytics"),roi:$("tab-btn-roi"),calendar:$("tab-btn-calendar")};
+  const panes={
+    home:$("tab-home"),
+    overview:$("tab-overview"),
+    analytics:$("tab-analytics"),
+    roi:$("tab-roi"),
+    calendar:$("tab-calendar"),
+    tools:$("tab-tools")
+  };
+  const btns={
+    home:$("tab-btn-home"),
+    overview:$("tab-btn-overview"),
+    analytics:$("tab-btn-analytics"),
+    roi:$("tab-btn-roi"),
+    calendar:$("tab-btn-calendar"),
+    tools:$("tab-btn-tools")
+  };
   Object.values(panes).forEach(p=>p.classList.add("hidden"));
   Object.values(btns).forEach(b=>b.classList.remove("active"));
   panes[tab].classList.remove("hidden");
   btns[tab].classList.add("active");
+
   if(tab==="home") renderHome();
   if(tab==="analytics") renderAnalytics();
   if(tab==="roi") renderROI();
   if(tab==="calendar"){ drawCalendar(); updateDayBox(); }
+  if(tab==="tools") initTools();
 }
 window.__go = function(tab){
   const needActive = (t)=>["overview","analytics","roi","calendar"].includes(t);
@@ -76,6 +94,7 @@ window.addEventListener("DOMContentLoaded", function(){
   $("tab-btn-analytics")?.addEventListener("click", ()=>window.__go("analytics"));
   $("tab-btn-roi")?.addEventListener("click", ()=>window.__go("roi"));
   $("tab-btn-calendar")?.addEventListener("click", ()=>window.__go("calendar"));
+  $("tab-btn-tools")?.addEventListener("click", ()=>window.__go("tools"));
 
   $("signup").addEventListener("click", signup);
   $("signin").addEventListener("click", signin);
@@ -504,19 +523,14 @@ function drawWinRateBySport(rows){
   });
 }
 
-/* Monthly P&L (fixed to always show) */
 function drawPnlMonthChart(rows){
   const c=$("pnlMonthChart"); if(!window.Chart||!c) return;
   const ctx=c.getContext("2d");
-
   const map=new Map();
   rows.forEach(b=>{ const k=b.date.slice(0,7); map.set(k,(map.get(k)||0)+b.profit); });
-
   const labels=Array.from(map.keys()).sort();
   const values=labels.map(k=>Number((map.get(k)||0).toFixed(2)));
-
   if(pnlMonthChart){ try{pnlMonthChart.destroy();}catch(_){} }
-
   if(labels.length===0){
     pnlMonthChart=new Chart(ctx,{ type:"bar",
       data:{ labels:["—"], datasets:[{ label:"Monthly P&L (€)", data:[0], backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
@@ -524,13 +538,11 @@ function drawPnlMonthChart(rows){
     });
     return;
   }
-
   const min = Math.min(...values);
   const max = Math.max(...values);
   const pad = Math.max(1, Math.round((Math.abs(max - min) || 1) * 0.2));
   const suggestedMin = Math.min(0, min - pad);
   const suggestedMax = Math.max(1, max + pad);
-
   pnlMonthChart=new Chart(ctx,{ type:"bar",
     data:{ labels, datasets:[{ label:"Monthly P&L (€)", data:values, backgroundColor:"rgba(124,58,237,0.5)", borderColor:"#7c3aed" }] },
     options:{ ...baseOpts(),
@@ -635,6 +647,118 @@ function renderROI(){
     tr.innerHTML="<td>"+sport+"</td><td class='right'>"+agg.bets+"</td><td class='right'>"+euro(agg.stake)+"</td><td class='right "+(roiPct>=0?"profit-pos":"profit-neg")+"'>"+euro(agg.profit)+"</td><td class='right "+(roiPct>=0?"profit-pos":"profit-neg")+"'>"+roiPct.toFixed(2)+"%</td>";
     tbody.appendChild(tr);
   });
+}
+
+/* ===== TOOLS ===== */
+function initTools(){
+  // sub tabs toggling
+  const panels={ risk:$("tools-risk"), poisson:$("tools-poisson"), masa:$("tools-masa") };
+  const btnRisk=$("tool-btn-risk"), btnPois=$("tool-btn-poisson"), btnMasa=$("tool-btn-masa");
+  const activate=(k)=>{
+    Object.values(panels).forEach(p=>p.classList.add("hidden"));
+    panels[k].classList.remove("hidden");
+    [btnRisk,btnPois,btnMasa].forEach(b=>b.classList.remove("active"));
+    (k==="risk"?btnRisk:k==="poisson"?btnPois:btnMasa).classList.add("active");
+  };
+  btnRisk.onclick = ()=>activate("risk");
+  btnPois.onclick = ()=>activate("poisson");
+  btnMasa.onclick = ()=>activate("masa");
+
+  // default view
+  if(!btnRisk.classList.contains("active")) activate("risk");
+
+  // Risk handlers
+  $("rk-run").onclick = ()=>{
+    const B = Number($("rk-bankroll").value||0);
+    const odds = Number($("rk-odds").value||0);
+    const p = clamp(Number($("rk-prob").value||0)/100,0,1);
+    const cap = clamp(Number($("rk-cap").value||0)/100,0,1);
+
+    const be = 1/odds;                   // breakeven probability
+    const edge = p - be;                 // absolute edge
+    const EVper1 = p*odds - 1;           // per €1 stake
+    const kelly = (odds>1) ? clamp(((odds-1)*p - (1-p)) / (odds-1), -1, 1) : 0; // fraction of bankroll
+
+    $("rk-be").textContent   = (be*100).toFixed(2)+"%";
+    $("rk-edge").textContent = (edge*100).toFixed(2)+"%";
+    $("rk-ev").textContent   = "€"+EVper1.toFixed(2)+"/€1";
+    $("rk-kelly").textContent= (kelly*100).toFixed(2)+"%";
+
+    $("rk-flat1").textContent = euro(B*0.01);
+    $("rk-flat2").textContent = euro(B*0.02);
+    $("rk-flat3").textContent = euro(B*0.03);
+    $("rk-half").textContent  = euro(Math.max(0,B*(kelly/2)));
+    $("rk-capval").textContent= euro(Math.max(0, B*Math.min(cap, Math.max(0,kelly))));
+  };
+
+  // Poisson handlers
+  $("ps-run").onclick = ()=>{
+    const lamH = Math.max(0.01, Number($("ps-home").value||0));
+    const lamA = Math.max(0.01, Number($("ps-away").value||0));
+    const line = Number($("ps-ouline").value||2.5);
+
+    // Poisson PMF using recurrence
+    const maxG=10;
+    function poisArr(lambda){
+      const arr=new Array(maxG+1).fill(0);
+      arr[0]=Math.exp(-lambda);
+      for(let k=1;k<=maxG;k++) arr[k]=arr[k-1]*lambda/k;
+      return arr;
+    }
+    const Ph=poisArr(lamH), Pa=poisArr(lamA);
+
+    let pH=0,pD=0,pA=0,pOver=0,pBTTS=0;
+    const markets=[];
+    for(let i=0;i<=maxG;i++){
+      for(let j=0;j<=maxG;j++){
+        const p=Ph[i]*Pa[j];
+        if(i>j) pH+=p; else if(i===j) pD+=p; else pA+=p;
+        if(i+j>line) pOver+=p;
+        if(i>=1 && j>=1) pBTTS+=p;
+      }
+    }
+
+    const fmt=(x)=> (x*100).toFixed(2)+"%";
+    const fair=(x)=> x>0 ? (1/x).toFixed(2) : "—";
+
+    $("ps-ph").textContent = fmt(pH);
+    $("ps-pd").textContent = fmt(pD);
+    $("ps-pa").textContent = fmt(pA);
+    $("ps-over").textContent = fmt(pOver);
+    $("ps-btts").textContent = fmt(pBTTS);
+
+    const tb=$("ps-table"); tb.innerHTML="";
+    [
+      ["Home",pH],["Draw",pD],["Away",pA],
+      ["Over "+line,pOver],["Under "+line, Math.max(0,1-pOver)],
+      ["BTTS Yes",pBTTS],["BTTS No",Math.max(0,1-pBTTS)]
+    ].forEach(([label,p])=>{
+      const tr=document.createElement("tr");
+      tr.innerHTML="<td>"+label+"</td><td class='right'>"+fmt(p)+"</td><td class='right'>"+fair(p)+"</td>";
+      tb.appendChild(tr);
+    });
+  };
+
+  // Masaniello handlers (simplified helper)
+  $("ms-run").onclick = ()=>{
+    const C = Number($("ms-capital").value||0);     // current capital
+    const targetProfit = Number($("ms-target").value||0);
+    const r = Number($("ms-odds").value||0);        // decimal odds
+    const N = Math.max(1, parseInt($("ms-n").value||"1",10));
+    const p = clamp(Number($("ms-p").value||0)/100,0,1);
+    const winsSoFar = Math.max(0, parseInt($("ms-wins").value||"0",10));
+
+    const q = Math.max(1, Math.ceil(p*N));          // required wins to hit target
+    const g = Math.max(1, q - winsSoFar);           // remaining wins needed
+    const T = C + Math.max(0,targetProfit);         // target capital
+    const stake = Math.max(0, (T - C) / ((r - 1) * g));
+
+    $("ms-q").textContent = String(q);
+    $("ms-rem").textContent = String(g);
+    $("ms-stake").textContent = euro(stake);
+    $("ms-nextwin").textContent  = euro(C + stake*(r-1));
+    $("ms-nextloss").textContent = euro(C - stake);
+  };
 }
 
 /* Utils */
