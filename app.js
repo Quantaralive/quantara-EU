@@ -6,11 +6,11 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Quantara app v5 — multi-bankroll");
+console.log("Quantara app v6 — multi-bankroll");
 
 /* State */
-let bankrolls = [];                // all bankrolls for user
-let allBets = [];                  // all bets (all bankrolls)
+let bankrolls = [];
+let allBets = [];
 let activeBankrollId = localStorage.getItem("quantara_active_bankroll_id") || null;
 
 let bankrollChart = null, analyticsStakeChart = null, pnlBarChart = null,
@@ -30,82 +30,67 @@ function monthName(ym){ const p=ym.split("-"); const d=new Date(Number(p[0]), Nu
 function median(arr){ const a=arr.slice().sort((x,y)=>x-y); if(!a.length) return 0; const m=Math.floor(a.length/2); return a.length%2?a[m]:(a[m-1]+a[m])/2; }
 const baseOpts = ()=>({ responsive:true, maintainAspectRatio:false, resizeDelay:200 });
 
+/* Tab routing */
 function setTab(tab){
   const panes={home:$("tab-home"),overview:$("tab-overview"),analytics:$("tab-analytics"),roi:$("tab-roi"),calendar:$("tab-calendar")};
   const btns ={home:$("tab-btn-home"),overview:$("tab-btn-overview"),analytics:$("tab-btn-analytics"),roi:$("tab-btn-roi"),calendar:$("tab-btn-calendar")};
   Object.values(panes).forEach(p=>p.classList.add("hidden"));
   Object.values(btns).forEach(b=>b.classList.remove("active"));
-
   panes[tab].classList.remove("hidden");
   btns[tab].classList.add("active");
-
+  if(tab==="home") renderHome();
   if(tab==="analytics") renderAnalytics();
   if(tab==="roi") renderROI();
   if(tab==="calendar"){ drawCalendar(); updateDayBox(); }
 }
 
+/* Expose reliable navigation as inline handlers */
+window.__go = function(tab){
+  const needActive = (t)=>["overview","analytics","roi","calendar"].includes(t);
+  if(needActive(tab) && !getActive()){
+    alert("Select or create a bankroll on Home first.");
+    setTab("home");
+    openBkModal(); // helpful prompt
+    return;
+  }
+  setTab(tab);
+};
+window.__openBkModal = ()=>openBkModal();
+window.__clearActive = ()=>{
+  activeBankrollId = null;
+  localStorage.removeItem("quantara_active_bankroll_id");
+  setTab("home"); render();
+};
+
+/* Utils re bankroll */
 function getActive(){ return bankrolls.find(b=>b.id===activeBankrollId) || null; }
 function currentBets(){ return allBets.filter(b=>b.bankroll_id === activeBankrollId); }
 
 /* Startup */
 window.addEventListener("DOMContentLoaded", function(){
-  $("tab-btn-home").addEventListener("click", ()=>setTab("home"));
-  $("tab-btn-overview").addEventListener("click", ()=>ensureAndSet("overview"));
-  $("tab-btn-analytics").addEventListener("click", ()=>ensureAndSet("analytics"));
-  $("tab-btn-roi").addEventListener("click", ()=>ensureAndSet("roi"));
-  $("tab-btn-calendar").addEventListener("click", ()=>ensureAndSet("calendar"));
+  // Still attach listeners (nice for keyboard users), but inline exists too
+  $("tab-btn-home")?.addEventListener("click", ()=>window.__go("home"));
+  $("tab-btn-overview")?.addEventListener("click", ()=>window.__go("overview"));
+  $("tab-btn-analytics")?.addEventListener("click", ()=>window.__go("analytics"));
+  $("tab-btn-roi")?.addEventListener("click", ()=>window.__go("roi"));
+  $("tab-btn-calendar")?.addEventListener("click", ()=>window.__go("calendar"));
 
   $("signup").addEventListener("click", signup);
   $("signin").addEventListener("click", signin);
   $("send-link").addEventListener("click", sendMagic);
   $("signout").addEventListener("click", signout);
 
-  $("btn-new-bankroll").addEventListener("click", openBkModal);
+  // Also wire the modal buttons (in case inline fails)
+  $("btn-new-bankroll")?.addEventListener("click", openBkModal);
   $("bk-close").addEventListener("click", closeBkModal);
   $("bk-cancel").addEventListener("click", closeBkModal);
   $("bk-form").addEventListener("submit", createBankroll);
-  $("btn-clear-active").addEventListener("click", ()=>{
-    activeBankrollId = null;
-    localStorage.removeItem("quantara_active_bankroll_id");
-    setTab("home"); render();
-  });
+  $("btn-clear-active")?.addEventListener("click", window.__clearActive);
 
-  $("save-bankroll").addEventListener("click", async ()=>{
-    const active = getActive(); if(!active){ alert("Pick a bankroll first on Home."); return; }
-    const v = Number($("bankroll-start").value || "0");
-    const upd = await supabase.from("bankrolls").update({ start_amount: isNaN(v)?0:v }).eq("id", active.id);
-    if(upd.error){ alert(upd.error.message); return; }
-    await loadBankrolls();
-    renderKPIs();
-    drawBankrollChart();
-    if(!$("tab-analytics").classList.contains("hidden")) renderAnalytics();
-  });
+  $("save-bankroll").addEventListener("click", saveBankrollStart);
 
   // Add bet (to active bankroll)
-  $("add-form").addEventListener("submit", async (e)=>{
-    e.preventDefault();
-    const active = getActive();
-    if(!active){ alert("Select a bankroll first on Home."); return; }
-    const u=await supabase.auth.getUser(); const user=u&&u.data?u.data.user:null;
-    if(!user){ alert("Please sign in first."); return; }
-    const payload={
-      bankroll_id: active.id,
-      event_date:$("f-date").value?new Date($("f-date").value).toISOString():new Date().toISOString(),
-      sport:$("f-sport").value||"Football",
-      league: emptyNull("f-league"),
-      market: emptyNull("f-market"),
-      selection: emptyNull("f-selection"),
-      odds: parseFloat($("f-odds").value||"1.80"),
-      stake: parseFloat($("f-stake").value||"100"),
-      result:$("f-result").value,
-      notes:null
-    };
-    const ins=await supabase.from("bets").insert(payload);
-    if(ins.error){ alert("Insert failed: "+ins.error.message); return; }
-    e.target.reset();
-    await loadBets();
-    await renderAfterData();
-  });
+  $("add-form").addEventListener("submit", addBetSubmit);
 
   // Edit bet modal
   $("edit-close").addEventListener("click", closeEdit);
@@ -205,17 +190,14 @@ async function render(){
 }
 
 async function renderAfterData(){
-  // HOME screen
   renderHome();
 
-  // If no bankroll selected → stay on Home and lock others
   const active = getActive();
   if(!active){
     setTab("home");
     return;
   }
 
-  // Overview & friends
   $("bk-name-inline").textContent = active.name;
   $("bk-name-inline-2").textContent = active.name;
   $("bankroll-start").value = String(active.start_amount || 0);
@@ -284,6 +266,7 @@ async function createBankroll(e){
   await loadBets();
   await renderAfterData();
 }
+
 async function selectBankroll(id){
   activeBankrollId = id;
   localStorage.setItem("quantara_active_bankroll_id", id);
@@ -306,9 +289,37 @@ async function deleteBankroll(id){
   await loadBankrolls(); await renderAfterData();
 }
 
-function ensureAndSet(tab){
-  if(!getActive()){ alert("Go to Home and select a bankroll first."); setTab("home"); return; }
-  setTab(tab);
+async function saveBankrollStart(){
+  const active = getActive(); if(!active){ alert("Pick a bankroll first on Home."); return; }
+  const v=Number($("bankroll-start").value || "0");
+  const upd=await supabase.from("bankrolls").update({ start_amount: isNaN(v)?0:v }).eq("id", active.id);
+  if(upd.error){ alert(upd.error.message); return; }
+  await loadBankrolls(); renderKPIs(); drawBankrollChart(); if(!$("tab-analytics").classList.contains("hidden")) renderAnalytics();
+}
+
+async function addBetSubmit(e){
+  e.preventDefault();
+  const active = getActive();
+  if(!active){ alert("Select a bankroll first on Home."); return; }
+  const u=await supabase.auth.getUser(); const user=u&&u.data?u.data.user:null;
+  if(!user){ alert("Please sign in first."); return; }
+  const payload={
+    bankroll_id: active.id,
+    event_date:$("f-date").value?new Date($("f-date").value).toISOString():new Date().toISOString(),
+    sport:$("f-sport").value||"Football",
+    league: emptyNull("f-league"),
+    market: emptyNull("f-market"),
+    selection: emptyNull("f-selection"),
+    odds: parseFloat($("f-odds").value||"1.80"),
+    stake: parseFloat($("f-stake").value||"100"),
+    result:$("f-result").value,
+    notes:null
+  };
+  const ins=await supabase.from("bets").insert(payload);
+  if(ins.error){ alert("Insert failed: "+ins.error.message); return; }
+  e.target.reset();
+  await loadBets();
+  await renderAfterData();
 }
 
 /* KPIs / Ledger */
