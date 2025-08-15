@@ -14,11 +14,11 @@
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 
-  <!-- Inline favicon -->
+  <!-- Inline favicon (purple dot) -->
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%237c3aed'/%3E%3C/svg%3E">
 </head>
 <body>
-  <!-- BG -->
+  <!-- Background -->
   <div class="bg"><div class="bg-glow"></div><div class="bg-grid"></div></div>
 
   <!-- Top bar -->
@@ -131,16 +131,15 @@
       </section>
     </div>
 
-    <!-- ANALYTICS (tidy) -->
+    <!-- ANALYTICS -->
     <div id="tab-analytics" class="hidden">
-      <!-- Row 1 -->
       <section class="cards">
         <div class="card"><div class="card-label">Net Profit</div><div class="card-value" id="an-net-profit">€0</div></div>
         <div class="card"><div class="card-label">Win rate</div><div class="card-value" id="an-winrate">0%</div></div>
         <div class="card"><div class="card-label">Profit factor</div><div class="card-value" id="an-pf">0.00</div></div>
         <div class="card"><div class="card-label">Max drawdown</div><div class="card-value" id="max-dd">€0</div></div>
       </section>
-      <!-- Row 2 -->
+
       <section class="cards" style="margin-top:12px;">
         <div class="card"><div class="card-label">Total staked</div><div class="card-value" id="an-staked">€0</div></div>
         <div class="card"><div class="card-label">Avg stake</div><div class="card-value" id="avg-stake">€0</div></div>
@@ -148,7 +147,6 @@
         <div class="card"><div class="card-label">Edge / Kelly</div><div class="card-value" id="edge">0.00% / 0.00%</div></div>
       </section>
 
-      <!-- Charts -->
       <section class="analytics-charts tidy">
         <div class="chart-card span-2 tall">
           <div class="chart-title">P&L by sport</div>
@@ -291,7 +289,7 @@
     </div>
   </div>
 
-  <!-- v8 to bust cache -->
-  <script type="module" src="app.js?v=8"></script>
+  <!-- v9 to bust cache -->
+  <script type="module" src="app.js?v=9"></script>
 </body>
 </html>
