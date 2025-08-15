@@ -6,15 +6,20 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-console.log("Quantara app v6 — multi-bankroll");
+console.log("Quantara app v7 — analytics tidy");
 
 /* State */
 let bankrolls = [];
 let allBets = [];
 let activeBankrollId = localStorage.getItem("quantara_active_bankroll_id") || null;
 
-let bankrollChart = null, analyticsStakeChart = null, pnlBarChart = null,
-    oddsHistChart = null, resultsPieChart = null, pnlMonthChart = null, winRateBySportChart = null;
+let bankrollChart = null,
+    pnlBarChart = null,
+    oddsHistChart = null,
+    resultsPieChart = null,
+    winRateBySportChart = null,
+    pnlBySportChart = null,
+    weekdayChart = null;
 
 let activeMonthKey = null, filterDateISO = null, selectedCalendarISO = null;
 let currentMonth = new Date();
@@ -44,13 +49,13 @@ function setTab(tab){
   if(tab==="calendar"){ drawCalendar(); updateDayBox(); }
 }
 
-/* Expose reliable navigation as inline handlers */
+/* Expose reliable navigation */
 window.__go = function(tab){
   const needActive = (t)=>["overview","analytics","roi","calendar"].includes(t);
   if(needActive(tab) && !getActive()){
     alert("Select or create a bankroll on Home first.");
     setTab("home");
-    openBkModal(); // helpful prompt
+    openBkModal();
     return;
   }
   setTab(tab);
@@ -68,7 +73,6 @@ function currentBets(){ return allBets.filter(b=>b.bankroll_id === activeBankrol
 
 /* Startup */
 window.addEventListener("DOMContentLoaded", function(){
-  // Still attach listeners (nice for keyboard users), but inline exists too
   $("tab-btn-home")?.addEventListener("click", ()=>window.__go("home"));
   $("tab-btn-overview")?.addEventListener("click", ()=>window.__go("overview"));
   $("tab-btn-analytics")?.addEventListener("click", ()=>window.__go("analytics"));
@@ -80,7 +84,6 @@ window.addEventListener("DOMContentLoaded", function(){
   $("send-link").addEventListener("click", sendMagic);
   $("signout").addEventListener("click", signout);
 
-  // Also wire the modal buttons (in case inline fails)
   $("btn-new-bankroll")?.addEventListener("click", openBkModal);
   $("bk-close").addEventListener("click", closeBkModal);
   $("bk-cancel").addEventListener("click", closeBkModal);
@@ -89,20 +92,16 @@ window.addEventListener("DOMContentLoaded", function(){
 
   $("save-bankroll").addEventListener("click", saveBankrollStart);
 
-  // Add bet (to active bankroll)
   $("add-form").addEventListener("submit", addBetSubmit);
 
-  // Edit bet modal
   $("edit-close").addEventListener("click", closeEdit);
   $("edit-cancel").addEventListener("click", closeEdit);
   $("edit-form").addEventListener("submit", onEditSubmit);
 
-  // Calendar controls
   $("cal-prev").addEventListener("click", ()=>{ currentMonth.setMonth(currentMonth.getMonth()-1); drawCalendar(); });
   $("cal-next").addEventListener("click", ()=>{ currentMonth.setMonth(currentMonth.getMonth()+1); drawCalendar(); });
   $("clear-filter").addEventListener("click", ()=>{ selectedCalendarISO=null; filterDateISO=null; drawCalendar(); updateDayBox(); });
 
-  // Global handlers for action buttons
   window.__edit = (id)=>openEdit(id);
   window.__del  = (id)=>deleteBet(id);
   window.__openBk = (id)=>selectBankroll(id);
@@ -149,14 +148,12 @@ async function loadBankrolls(){
   const r = await supabase.from("bankrolls").select("*").order("created_at",{ascending:true});
   if(r.error){ alert(r.error.message); return; }
   bankrolls = r.data || [];
-  // If no selection, or selection missing, pick first
   if(!activeBankrollId || !bankrolls.find(b=>b.id===activeBankrollId)){
     activeBankrollId = bankrolls[0]?.id || null;
     if(activeBankrollId) localStorage.setItem("quantara_active_bankroll_id", activeBankrollId);
     else localStorage.removeItem("quantara_active_bankroll_id");
   }
 }
-
 async function loadBets(){
   const r = await supabase
     .from("bets")
@@ -188,7 +185,6 @@ async function render(){
   await loadBets();
   await renderAfterData();
 }
-
 async function renderAfterData(){
   renderHome();
 
@@ -219,7 +215,7 @@ function renderHome(){
 
   const grid = $("bankroll-grid");
   grid.innerHTML = "";
-  const totals = new Map(); // bankroll_id -> {pnl, count}
+  const totals = new Map();
   allBets.forEach(b=>{
     const t = totals.get(b.bankroll_id) || { pnl:0, count:0 };
     t.pnl += b.profit; t.count += 1; totals.set(b.bankroll_id, t);
@@ -266,7 +262,6 @@ async function createBankroll(e){
   await loadBets();
   await renderAfterData();
 }
-
 async function selectBankroll(id){
   activeBankrollId = id;
   localStorage.setItem("quantara_active_bankroll_id", id);
@@ -296,7 +291,6 @@ async function saveBankrollStart(){
   if(upd.error){ alert(upd.error.message); return; }
   await loadBankrolls(); renderKPIs(); drawBankrollChart(); if(!$("tab-analytics").classList.contains("hidden")) renderAnalytics();
 }
-
 async function addBetSubmit(e){
   e.preventDefault();
   const active = getActive();
@@ -327,14 +321,42 @@ function renderKPIs(){
   const rows = currentBets();
   const stake = rows.reduce((s,b)=>s+b.stake,0);
   const profit = rows.reduce((s,b)=>s+b.profit,0);
-  const settled = rows.filter(b=>b.result!=="pending");
+  const settled = rows.filter(b=>b.result!=="pending" && b.result!=="void");
   const wins = settled.filter(b=>b.result==="win").length;
-  const winRate = settled.length ? (wins/settled.length)*100 : 0;
+  const winRate = settled.length ? (wins/settled.length) : 0;
+  const pf = (()=>{ const gw=settled.filter(b=>b.profit>0).reduce((s,b)=>s+b.profit,0);
+                    const gl=Math.abs(settled.filter(b=>b.profit<0).reduce((s,b)=>s+b.profit,0));
+                    return gl ? gw/gl : 0; })();
 
-  const startAmt = getActive()?.start_amount || 0;
-  $("bankroll").textContent = euro(startAmt + profit);
+  $("bankroll").textContent = euro((getActive()?.start_amount||0) + profit);
   $("staked").textContent = euro(stake);
-  $("winrate").textContent = winRate.toFixed(1)+"%";
+  $("winrate").textContent = (winRate*100).toFixed(1)+"%";
+
+  // Analytics KPIs
+  const avgStake = settled.length? settled.reduce((s,b)=>s+b.stake,0)/settled.length : 0;
+  const avgOdds  = settled.length? settled.reduce((s,b)=>s+b.odds,0)/settled.length : 0;
+  const maxDD    = euro(computeMaxDrawdown(rows));
+
+  $("an-net-profit").textContent = euro(profit);
+  $("an-winrate").textContent    = (winRate*100).toFixed(1)+"%";
+  $("an-pf").textContent         = pf.toFixed(2);
+  $("max-dd").textContent        = maxDD;
+  $("an-staked").textContent     = euro(stake);
+  $("avg-stake").textContent     = euro(avgStake);
+  $("avg-odds").textContent      = avgOdds.toFixed(2);
+
+  // Edge and Kelly (based on overall win rate & avg odds)
+  let edgePct = 0, kellyPct = 0;
+  if(avgOdds>0 && settled.length>0){
+    const p = winRate;               // observed success rate
+    const b = Math.max(0, avgOdds - 1); // decimal odds -> net multiple
+    const q = 1 - p;
+    const breakeven = 1/avgOdds;
+    edgePct = (p - breakeven) * 100;
+    const k = (b>0) ? ( (b*p - q) / b ) : 0; // Kelly fraction
+    kellyPct = Math.max(0, k) * 100;
+  }
+  $("edge").textContent = `${edgePct.toFixed(2)}% / ${kellyPct.toFixed(2)}%`;
 }
 
 function buildMonthTabs(){
@@ -421,7 +443,7 @@ async function onEditSubmit(e){
 async function deleteBet(id){
   if(!confirm("Delete this bet?")) return;
   const del=await supabase.from("bets").delete().eq("id", id);
-  if(del.error){ alert("Delete failed: "+del.error.message); return; }
+  if(del.error){ alert(del.error.message); return; }
   await loadBets(); await renderAfterData();
 }
 
@@ -444,90 +466,36 @@ function drawBankrollChart(){
 /* Analytics */
 function renderAnalytics(){
   const rows=currentBets();
-  const settled=rows.filter(b=>b.result!=="pending");
-  const avgOdds=settled.length? settled.reduce((s,b)=>s+b.odds,0)/settled.length : 0;
-  $("avg-odds").textContent=avgOdds.toFixed(2);
-  $("max-dd").textContent=euro(computeMaxDrawdown(rows));
-  $("bets-total").textContent=String(rows.length);
-  $("bets-pending").textContent=String(rows.filter(b=>b.result==="pending").length);
+  const settled=rows.filter(b=>b.result!=="pending" && b.result!=="void");
+  // KPIs are updated in renderKPIs already.
 
-  const grossWin=settled.filter(b=>b.profit>0).reduce((s,b)=>s+b.profit,0);
-  const grossLoss=settled.filter(b=>b.profit<0).reduce((s,b)=>s+b.profit,0);
-  const pf=grossLoss? (grossWin/Math.abs(grossLoss)) : 0;
-  $("pf").textContent=pf.toFixed(2);
-
-  const avgStake=settled.length? settled.reduce((s,b)=>s+b.stake,0)/settled.length : 0;
-  $("avg-stake").textContent=euro(avgStake);
-
-  const medOdds=median(settled.map(b=>b.odds));
-  $("median-odds").textContent=medOdds.toFixed(2);
-
-  const seq=settled.slice().sort((a,b)=>a.date.localeCompare(b.date)).map(b=>b.result);
-  let lw=0,ll=0,cw=0,cl=0;
-  seq.forEach(r=>{ if(r==="win"){ cw++; cl=0; lw=Math.max(lw,cw);} else if(r==="loss"){ cl++; cw=0; ll=Math.max(ll,cl);} else { cw=0; cl=0; } });
-  $("streaks").textContent=lw+" / "+ll;
-
-  drawAnalyticsStakeChart(rows); drawPnlBarChart(rows); drawOddsHistogram(rows);
-  drawResultsPie(rows); drawPnlMonthChart(rows); drawWinRateBySportChart(rows);
+  drawPnlBySport(rows);
+  drawWinRateBySport(rows);
+  drawPnlBarChart(rows);
+  drawWeekdayChart(rows);
+  drawOddsHistogram(rows);
+  drawResultsPie(rows);
 }
-function drawAnalyticsStakeChart(rows){
-  const c=$("analyticsStakeChart"); if(!window.Chart||!c) return;
+
+function drawPnlBySport(rows){
+  const c=$("pnlBySportChart"); if(!window.Chart||!c) return;
   const ctx=c.getContext("2d");
-  const bySport={}; rows.forEach(b=>{ bySport[b.sport]=(bySport[b.sport]||0)+b.stake; });
-  const labels=Object.keys(bySport), values=Object.values(bySport);
-  if(analyticsStakeChart){ try{analyticsStakeChart.destroy();}catch(_){} }
-  analyticsStakeChart=new Chart(ctx,{ type:"doughnut",
-    data:{ labels, datasets:[{ data:values, borderWidth:1, borderColor:"#0d1524", backgroundColor:["#22d3ee","#7c3aed","#34d399","#f472b6","#fde047","#f97316"] }] },
-    options:{ ...baseOpts(), cutout:"70%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } }
+  const map=new Map();
+  rows.forEach(b=>{ map.set(b.sport,(map.get(b.sport)||0)+b.profit); });
+  const labels=Array.from(map.keys());
+  const values=labels.map(s=>Number((map.get(s)||0).toFixed(2)));
+  if(pnlBySportChart){ try{pnlBySportChart.destroy();}catch(_){} }
+  pnlBySportChart=new Chart(ctx,{ type:"bar",
+    data:{ labels, datasets:[{ label:"P&L (€)", data:values }] },
+    options:{ ...baseOpts(),
+      indexAxis:"y",
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>euro(c.parsed.x) } } },
+      scales:{ x:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.08)"}}, y:{ticks:{color:"#93a0b7"}, grid:{display:false}} }
+    }
   });
 }
-function drawPnlBarChart(rows){
-  const c=$("pnlBarChart"); if(!window.Chart||!c) return;
-  const ctx=c.getContext("2d");
-  const daily=groupByDateSum(rows.map(b=>({date:b.date,pnl:b.profit})));
-  const labels=daily.map(d=>d.date);
-  const values=daily.map(d=>Number(d.pnl.toFixed(2)));
-  if(pnlBarChart){ try{pnlBarChart.destroy();}catch(_){} }
-  pnlBarChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"P&L (€)", data:values, backgroundColor:"rgba(124,58,237,0.55)" }] },
-    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } }
-  });
-}
-function drawOddsHistogram(rows){
-  const c=$("oddsHistChart"); if(!window.Chart||!c) return;
-  const ctx=c.getContext("2d");
-  const bins=[[1,1.5],[1.5,2],[2,2.5],[2.5,3],[3,10]];
-  const labels=["1-1.5","1.5-2","2-2.5","2.5-3","3+"];
-  const counts=bins.map(r=>{ const lo=r[0], hi=r[1]; return rows.filter(b=>b.odds>=lo && b.odds<(hi||1e9)).length; });
-  if(oddsHistChart){ try{oddsHistChart.destroy();}catch(_){} }
-  oddsHistChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"Bets", data:counts, backgroundColor:"rgba(34,211,238,0.55)"}] },
-    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, beginAtZero:true, precision:0 } } }
-  });
-}
-function drawResultsPie(rows){
-  const c=$("resultsPieChart"); if(!window.Chart||!c) return;
-  const ctx=c.getContext("2d");
-  const counts={win:0,loss:0,pending:0,void:0}; rows.forEach(b=>{ counts[b.result]=(counts[b.result]||0)+1; });
-  if(resultsPieChart){ try{resultsPieChart.destroy();}catch(_){} }
-  resultsPieChart=new Chart(ctx,{ type:"doughnut",
-    data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void], backgroundColor:["#22c55e","#ef4444","#7c3aed","#64748b"], borderWidth:1, borderColor:"#0d1524" }] },
-    options:{ ...baseOpts(), cutout:"65%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } }
-  });
-}
-function drawPnlMonthChart(rows){
-  const c=$("pnlMonthChart"); if(!window.Chart||!c) return;
-  const ctx=c.getContext("2d");
-  const map=new Map(); rows.forEach(b=>{ const k=b.date.slice(0,7); map.set(k,(map.get(k)||0)+b.profit); });
-  const labels=Array.from(map.keys()).sort();
-  const values=labels.map(k=>Number((map.get(k)||0).toFixed(2)));
-  if(pnlMonthChart){ try{pnlMonthChart.destroy();}catch(_){} }
-  pnlMonthChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"Monthly P&L (€)", data:values, backgroundColor:"rgba(34,197,94,0.5)" }] },
-    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } }
-  });
-}
-function drawWinRateBySportChart(rows){
+
+function drawWinRateBySport(rows){
   const c=$("winRateBySportChart"); if(!window.Chart||!c) return;
   const ctx=c.getContext("2d");
   const settled=rows.filter(b=>b.result!=="pending");
@@ -537,12 +505,62 @@ function drawWinRateBySportChart(rows){
   const values=labels.map(s=>{ const r=bySport.get(s); return r.t?(r.w/r.t*100):0; });
   if(winRateBySportChart){ try{winRateBySportChart.destroy();}catch(_){} }
   winRateBySportChart=new Chart(ctx,{ type:"bar",
-    data:{ labels, datasets:[{ label:"Win rate %", data:values, backgroundColor:"rgba(99,102,241,0.55)" }] },
+    data:{ labels, datasets:[{ label:"Win rate %", data:values }] },
     options:{ ...baseOpts(), plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label:c=>c.parsed.y.toFixed(1)+"%" } } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, suggestedMin:0, suggestedMax:100} } }
   });
 }
 
-/* Calendar */
+function drawPnlBarChart(rows){
+  const c=$("pnlBarChart"); if(!window.Chart||!c) return;
+  const ctx=c.getContext("2d");
+  const daily=groupByDateSum(rows.map(b=>({date:b.date,pnl:b.profit})));
+  const labels=daily.map(d=>d.date);
+  const values=daily.map(d=>Number(d.pnl.toFixed(2)));
+  if(pnlBarChart){ try{pnlBarChart.destroy();}catch(_){} }
+  pnlBarChart=new Chart(ctx,{ type:"bar",
+    data:{ labels, datasets:[{ label:"P&L (€)", data:values }] },
+    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } }
+  });
+}
+
+function drawWeekdayChart(rows){
+  const c=$("weekdayChart"); if(!window.Chart||!c) return;
+  const ctx=c.getContext("2d");
+  const labels=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const sums=[0,0,0,0,0,0,0];
+  rows.forEach(b=>{ const d=new Date(b.date); sums[d.getDay()]+=b.profit; });
+  if(weekdayChart){ try{weekdayChart.destroy();}catch(_){} }
+  weekdayChart=new Chart(ctx,{ type:"bar",
+    data:{ labels, datasets:[{ label:"P&L (€)", data:sums.map(x=>Number(x.toFixed(2))) }] },
+    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}} } }
+  });
+}
+
+function drawOddsHistogram(rows){
+  const c=$("oddsHistChart"); if(!window.Chart||!c) return;
+  const ctx=c.getContext("2d");
+  const bins=[[1,1.5],[1.5,2],[2,2.5],[2.5,3],[3,10]];
+  const labels=["1-1.5","1.5-2","2-2.5","2.5-3","3+"];
+  const counts=bins.map(r=>{ const lo=r[0], hi=r[1]; return rows.filter(b=>b.odds>=lo && b.odds<(hi||1e9)).length; });
+  if(oddsHistChart){ try{oddsHistChart.destroy();}catch(_){} }
+  oddsHistChart=new Chart(ctx,{ type:"bar",
+    data:{ labels, datasets:[{ label:"Bets", data:counts }] },
+    options:{ ...baseOpts(), plugins:{ legend:{ display:false } }, scales:{ x:{ticks:{color:"#93a0b7"}, grid:{display:false}}, y:{ticks:{color:"#93a0b7"}, grid:{color:"rgba(147,160,183,0.1)"}, beginAtZero:true, precision:0} } }
+  });
+}
+
+function drawResultsPie(rows){
+  const c=$("resultsPieChart"); if(!window.Chart||!c) return;
+  const ctx=c.getContext("2d");
+  const counts={win:0,loss:0,pending:0,void:0}; rows.forEach(b=>{ counts[b.result]=(counts[b.result]||0)+1; });
+  if(resultsPieChart){ try{resultsPieChart.destroy();}catch(_){} }
+  resultsPieChart=new Chart(ctx,{ type:"doughnut",
+    data:{ labels:["win","loss","pending","void"], datasets:[{ data:[counts.win,counts.loss,counts.pending,counts.void] }] },
+    options:{ ...baseOpts(), cutout:"65%", plugins:{ legend:{ labels:{ color:"#e7eefc"} } } }
+  });
+}
+
+/* Calendar + ROI (unchanged logic) */
 function drawCalendar(){
   const rows=currentBets();
   const y=currentMonth.getFullYear(), m=currentMonth.getMonth();
@@ -579,7 +597,6 @@ function updateDayBox(){
   });
 }
 
-/* ROI */
 function renderROI(){
   const rows=currentBets();
   const settled=rows.filter(b=>b.result!=="pending" && b.result!=="void");
