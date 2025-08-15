@@ -50,7 +50,7 @@
       <button id="tab-btn-calendar"  class="tab" onclick="window.__go('calendar')">Calendar</button>
     </div>
 
-    <!-- HOME: pick/create bankroll -->
+    <!-- HOME -->
     <div id="tab-home">
       <section class="cards header-actions">
         <div class="card span-2">
@@ -131,29 +131,40 @@
       </section>
     </div>
 
-    <!-- ANALYTICS -->
+    <!-- ANALYTICS (tidy) -->
     <div id="tab-analytics" class="hidden">
+      <!-- Row 1 -->
       <section class="cards">
-        <div class="card"><div class="card-label">Average odds (settled)</div><div class="card-value" id="avg-odds">0.00</div></div>
+        <div class="card"><div class="card-label">Net Profit</div><div class="card-value" id="an-net-profit">€0</div></div>
+        <div class="card"><div class="card-label">Win rate</div><div class="card-value" id="an-winrate">0%</div></div>
+        <div class="card"><div class="card-label">Profit factor</div><div class="card-value" id="an-pf">0.00</div></div>
         <div class="card"><div class="card-label">Max drawdown</div><div class="card-value" id="max-dd">€0</div></div>
-        <div class="card"><div class="card-label">Total bets</div><div class="card-value" id="bets-total">0</div></div>
-        <div class="card"><div class="card-label">Pending</div><div class="card-value" id="bets-pending">0</div></div>
       </section>
+      <!-- Row 2 -->
       <section class="cards" style="margin-top:12px;">
-        <div class="card"><div class="card-label">Profit factor</div><div class="card-value" id="pf">0.00</div></div>
+        <div class="card"><div class="card-label">Total staked</div><div class="card-value" id="an-staked">€0</div></div>
         <div class="card"><div class="card-label">Avg stake</div><div class="card-value" id="avg-stake">€0</div></div>
-        <div class="card"><div class="card-label">Median odds</div><div class="card-value" id="median-odds">0.00</div></div>
-        <div class="card"><div class="card-label">Longest streak (W/L)</div><div class="card-value" id="streaks">0 / 0</div></div>
+        <div class="card"><div class="card-label">Avg odds</div><div class="card-value" id="avg-odds">0.00</div></div>
+        <div class="card"><div class="card-label">Edge / Kelly</div><div class="card-value" id="edge">0.00% / 0.00%</div></div>
       </section>
 
-      <section class="analytics-charts">
-        <div class="chart-card span-2">
-          <div class="chart-title">Stake by sport</div>
-          <div class="donut-wrap-lg"><canvas id="analyticsStakeChart"></canvas></div>
+      <!-- Charts -->
+      <section class="analytics-charts tidy">
+        <div class="chart-card span-2 tall">
+          <div class="chart-title">P&L by sport</div>
+          <canvas id="pnlBySportChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Win rate by sport</div>
+          <canvas id="winRateBySportChart"></canvas>
         </div>
         <div class="chart-card">
           <div class="chart-title">Daily P&L</div>
           <canvas id="pnlBarChart"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Profit by weekday</div>
+          <canvas id="weekdayChart"></canvas>
         </div>
         <div class="chart-card">
           <div class="chart-title">Odds distribution</div>
@@ -162,14 +173,6 @@
         <div class="chart-card">
           <div class="chart-title">Results breakdown</div>
           <canvas id="resultsPieChart"></canvas>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">P&L by month</div>
-          <canvas id="pnlMonthChart"></canvas>
-        </div>
-        <div class="chart-card">
-          <div class="chart-title">Win rate by sport</div>
-          <canvas id="winRateBySportChart"></canvas>
         </div>
       </section>
     </div>
@@ -182,6 +185,7 @@
         <div class="card"><div class="card-label">Profit (Settled)</div><div class="card-value" id="roi-profit">€0</div></div>
         <div class="card"><div class="card-label">Stake (Settled)</div><div class="card-value" id="roi-stake">€0</div></div>
       </section>
+
       <section class="ledger-section">
         <div class="section-title">ROI by sport</div>
         <div class="table-wrap">
@@ -287,7 +291,7 @@
     </div>
   </div>
 
-  <!-- v6 to bust cache -->
-  <script type="module" src="app.js?v=6"></script>
+  <!-- v7 to bust cache -->
+  <script type="module" src="app.js?v=7"></script>
 </body>
 </html>
