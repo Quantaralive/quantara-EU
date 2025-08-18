@@ -3,7 +3,7 @@
 // Frontend: GitHub Pages (static)
 // Auth/DB: Supabase (anon key)
 // Charts: Chart.js v4
-// Version: v19
+// Version: v20
 // ===============================
 
 // ---- Supabase setup (public anon key is OK for browser apps)
@@ -40,7 +40,7 @@ window.addEventListener("error", (e)=> console.error("Global error:", e.error ||
 window.addEventListener("unhandledrejection", (e)=> console.error("Unhandled promise rejection:", e.reason || e));
 
 // ---- Boot
-console.log("Quantara boot v19");
+console.log("Quantara boot v20");
 document.addEventListener("DOMContentLoaded", init);
 
 async function init(){
@@ -51,7 +51,7 @@ async function init(){
     wireEditModal();
     wireBankrollModal();
     wireCalendarUI();
-    wireToolsUI(); // safe; returns if elements absent
+    wireToolsUI();
 
     await refreshAuth();
     switchTab(State.activeTab || "home");
@@ -655,7 +655,7 @@ function renderROI(){
   const profit = settled.reduce((s,b)=> s+profitOf(b), 0);
   const roi = stake>0 ? (profit/stake*100):0;
   $("#roi-overall") && ($("#roi-overall").textContent = fmtPct(roi));
-  $("#roi-settled") && ($("#roi-settled").textContent = settled.length));
+  $("#roi-settled") && ($("#roi-settled").textContent = settled.length);
   $("#roi-profit") && ($("#roi-profit").textContent = fmtEur(profit));
   $("#roi-stake") && ($("#roi-stake").textContent = fmtEur(stake));
 
@@ -672,281 +672,4 @@ function renderROI(){
     const roiS = r.stake>0 ? (r.profit/r.stake*100) : 0;
     tr.innerHTML = `
       <td>${sport}</td>
-      <td class="right">${r.n}</td>
-      <td class="right">${fmtEur(r.stake)}</td>
-      <td class="right">${fmtEur(r.profit)}</td>
-      <td class="right">${roiS.toFixed(2)}%</td>
-    `;
-    tbody.appendChild(tr);
-  }
-}
-
-// ===============================
-// Calendar
-// ===============================
-function wireCalendarUI(){
-  on("#cal-prev","click", ()=>{ const c=State.calendar; c.month--; if(c.month<0){c.month=11;c.year--;} renderCalendar(); });
-  on("#cal-next","click", ()=>{ const c=State.calendar; c.month++; if(c.month>11){c.month=0;c.year++;} renderCalendar(); });
-  on("#clear-filter","click", ()=>{ $("#day-tbody") && ($("#day-tbody").innerHTML=""); $("#day-selected") && ($("#day-selected").textContent="—"); $("#day-pnl") && ($("#day-pnl").textContent="€0"); renderCalendar(); });
-}
-
-function renderCalendar(){
-  const grid = $("#calendar-grid"); const title=$("#cal-title");
-  if(title) title.textContent = new Date(State.calendar.year, State.calendar.month, 1).toLocaleDateString(undefined,{year:"numeric", month:"long"});
-  if(!grid) return;
-  grid.innerHTML = "";
-  const bk = currentBk(); if(!bk) return;
-
-  const bets = State.bets.filter(b=>b.bankroll_id===bk.id);
-  const first = new Date(State.calendar.year, State.calendar.month, 1);
-  const startDay = first.getDay();
-  const daysInMonth = new Date(State.calendar.year, State.calendar.month+1, 0).getDate();
-
-  const dayPnL = {}; const byDayRows = {};
-  for(const b of bets){
-    const d = b.date; if(!d) continue;
-    const dt = new Date(d+"T00:00:00");
-    if(dt.getFullYear()===State.calendar.year && dt.getMonth()===State.calendar.month){
-      const day = dt.getDate();
-      dayPnL[day] = (dayPnL[day]||0) + profitOf(b);
-      (byDayRows[day] ||= []).push(b);
-    }
-  }
-
-  for(let i=0;i<startDay;i++){ const cell = document.createElement("div"); cell.className="cell out"; grid.appendChild(cell); }
-  for(let d=1; d<=daysInMonth; d++){
-    const cell = document.createElement("div"); cell.className="cell";
-    const amt = dayPnL[d]||0;
-    const color = amt===0? "#93a0b7" : (amt>0? "#16a34a" : "#ef4444");
-    cell.innerHTML = `<div class="date-num">${d}</div><div class="amt" style="color:${color}">${amt===0?"":fmtEur(amt)}</div>`;
-    cell.addEventListener("click", ()=>{
-      $$(".calendar-grid .cell").forEach(c=>c.classList.remove("active"));
-      cell.classList.add("active");
-      const ds=$("#day-selected"); if(ds) ds.textContent = new Date(State.calendar.year, State.calendar.month, d).toDateString();
-      const dp=$("#day-pnl"); if(dp) dp.textContent = fmtEur(amt);
-      renderDayTable(byDayRows[d]||[]);
-    });
-    grid.appendChild(cell);
-  }
-}
-function renderDayTable(rows){
-  const tb = $("#day-tbody"); if(!tb) return;
-  tb.innerHTML="";
-  for(const b of rows){
-    const p = profitOf(b);
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${b.sport||""}</td>
-      <td>${b.market||""}</td>
-      <td>${b.selection||""}</td>
-      <td class="right">${Number(b.odds||0).toFixed(2)}</td>
-      <td class="right">${fmtEur(b.stake||0)}</td>
-      <td class="right">${b.result||""}</td>
-      <td class="right" style="color:${p>=0?"#16a34a":"#ef4444"}">${fmtEur(p)}</td>
-    `;
-    tb.appendChild(tr);
-  }
-}
-
-// ===============================
-// Tools
-// ===============================
-function wireToolsUI(){
-  // If the Tools UI is not in the DOM, skip
-  if(!$("#tool-btn-risk") && !$("#tool-btn-poisson") && !$("#tool-btn-masa")) return;
-
-  on("#tool-btn-risk","click", ()=> showTool("risk"));
-  on("#tool-btn-poisson","click", ()=> showTool("poisson"));
-  on("#tool-btn-masa","click", ()=> showTool("masa"));
-
-  const link = (numSel, rangeSel) => {
-    const num = $(numSel), rng=$(rangeSel);
-    if(!num || !rng) return;
-    num.addEventListener("input", ()=> rng.value = num.value);
-    rng.addEventListener("input", ()=> num.value = rng.value);
-  };
-  link("#rk-prob","#rk-prob-range");
-  link("#rk-cap","#rk-cap-range");
-  link("#ms-p","#ms-p-range");
-
-  on("#rk-run","click", runRisk);
-  on("#ps-run","click", runPoisson);
-
-  on("#ms-run","click", runMasaniello);
-  on("#ms-save","click", saveMasaniello);
-  on("#ms-delete","click", deleteMasaniello);
-  loadMasanielloList();
-}
-
-function showTool(which){
-  $$(".tools-nav .chip").forEach(c=>c.classList.remove("active"));
-  $(`#tool-btn-${which}`)?.classList.add("active");
-  ["risk","poisson","masa"].forEach(k => $(`#tools-${k}`)?.classList.add("hidden"));
-  $(`#tools-${which}`)?.classList.remove("hidden");
-}
-function renderToolsLanding(){}
-
-// ---- Risk
-function runRisk(){
-  const BR = Number($("#rk-bankroll")?.value||0);
-  const odds = Number($("#rk-odds")?.value||0);
-  const p = Number($("#rk-prob")?.value||0)/100;
-  const capPct = Number($("#rk-cap")?.value||0)/100;
-  if(BR<=0 || odds<=1.01) return alert("Enter bankroll and odds.");
-  const be = odds>0 ? 100/odds : 0;
-  const edge = p*100 - be;
-  const evPer1 = p*(odds-1) - (1-p);
-  const b = odds-1, q = 1-p;
-  const kelly = b>0 ? Math.max(0, (b*p - q)/b) : 0;
-  const kellyPct = kelly*100;
-  $("#rk-be") && ($("#rk-be").textContent = `${be.toFixed(2)}%`);
-  $("#rk-edge") && ($("#rk-edge").textContent = `${edge.toFixed(2)}%`);
-  $("#rk-ev") && ($("#rk-ev").textContent = fmtEur(evPer1));
-  $("#rk-kelly") && ($("#rk-kelly").textContent = `${kellyPct.toFixed(2)}%`);
-  const flat = BR*0.01;
-  const halfK = BR * (kelly/2);
-  const capped = BR * Math.min(kelly, capPct);
-  renderBarSimple("rkStakeChart","Stake size",["Flat 1%","Half Kelly","Capped Kelly"],[flat,halfK,capped]);
-}
-function renderBarSimple(canvasId,label,labels,values){
-  const ctx = document.getElementById(canvasId); if(!ctx) return;
-  const key = canvasId;
-  if(State.charts[key]) State.charts[key].destroy();
-  State.charts[key] = new Chart(ctx, {
-    type:"bar",
-    data:{ labels, datasets:[{ label, data: values }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{display:false}, tooltip:{ callbacks:{ label:c=> fmtEur(c.parsed.y) }}}}
-  });
-}
-
-// ---- Poisson
-function runPoisson(){
-  const lamH = Number($("#ps-home")?.value||0);
-  const lamA = Number($("#ps-away")?.value||0);
-  const ouLine = Number($("#ps-ouline")?.value||2.5);
-  const maxG = 8;
-  const pH = []; const pA = [];
-  for(let k=0;k<=maxG;k++){ pH.push(poissonPMF(k, lamH)); pA.push(poissonPMF(k, lamA)); }
-  let ph=0, pd=0, pa=0, btts=0;
-  const totalGoals = Array(maxG*2+1).fill(0);
-  for(let i=0;i<=maxG;i++){
-    for(let j=0;j<=maxG;j++){
-      const pij = pH[i]*pA[j];
-      if(i>j) ph+=pij; else if(i===j) pd+=pij; else pa+=pij;
-      totalGoals[i+j]+=pij;
-      if(i>0 && j>0) btts+=pij;
-    }
-  }
-  let over=0; for(let tg=0; tg<totalGoals.length; tg++){ if(tg>ouLine) over += totalGoals[tg]; }
-  $("#ps-ph") && ($("#ps-ph").textContent = fmtPct(ph*100));
-  $("#ps-pd") && ($("#ps-pd").textContent = fmtPct(pd*100));
-  $("#ps-pa") && ($("#ps-pa").textContent = fmtPct(pa*100));
-  $("#ps-over") && ($("#ps-over").textContent = fmtPct(over*100));
-  $("#ps-btts") && ($("#ps-btts").textContent = fmtPct(btts*100));
-  renderBarSimple("ps1x2Chart","Prob.",["Home","Draw","Away"],[ph,pd,pa].map(x=>x*100));
-  const tgLabels = totalGoals.map((_,i)=> i);
-  renderBarSimple("psGoalsChart","%", tgLabels, totalGoals.map(x=>x*100));
-  renderBarSimple("psBttsChart","%", ["BTTS Yes","BTTS No"], [btts*100, (1-btts)*100]);
-
-  const rows = [
-    ["Home", ph, 1/ph],
-    ["Draw", pd, 1/pd],
-    ["Away", pa, 1/pa],
-    ["Over "+ouLine.toFixed(1), over, 1/over],
-    ["Under "+ouLine.toFixed(1), 1-over, 1/(1-over)],
-    ["BTTS Yes", btts, 1/btts],
-    ["BTTS No", 1-btts, 1/(1-btts)]
-  ];
-  const tb = $("#ps-table"); if(tb){ tb.innerHTML = ""; for(const r of rows){ const tr = document.createElement("tr"); tr.innerHTML = `<td>${r[0]}</td><td class="right">${(r[1]*100).toFixed(2)}%</td><td class="right">${isFinite(r[2]) ? r[2].toFixed(2) : "—"}</td>`; tb.appendChild(tr);} }
-}
-function poissonPMF(k, lambda){ return Math.exp(-lambda) * Math.pow(lambda,k) / factorial(k); }
-const factorial = (n)=> { let r=1; for(let i=2;i<=n;i++) r*=i; return r; };
-
-// ---- Masaniello (localStorage)
-function runMasaniello(){
-  const name = $("#ms-name")?.value?.trim() || "My System";
-  const cap0 = Number($("#ms-capital")?.value||0);
-  const target = Number($("#ms-target")?.value||0);
-  const odds = Number($("#ms-odds")?.value||0);
-  const n = parseInt($("#ms-n")?.value||10,10);
-  const p = Number($("#ms-p")?.value||0)/100;
-  const winsDone = parseInt($("#ms-wins")?.value||0,10);
-  if(cap0<=0 || odds<=1.01 || n<=0) return alert("Fill capital, odds and number of bets.");
-  const b = odds-1;
-  const baseStake = Math.max(1, Math.min(cap0*0.1, (target/n)/Math.max(0.01, b)));
-  const rows = []; let cap = cap0;
-  for(let i=1;i<=n;i++){ const stake = Math.min(baseStake, cap*0.1); rows.push({ i, stake, result: "", cap }); }
-  $("#ms-q") && ($("#ms-q").textContent = `${Math.round(p*n)} (est.)`);
-  $("#ms-rem") && ($("#ms-rem").textContent = `${n - winsDone}`);
-  $("#ms-stake") && ($("#ms-stake").textContent = fmtEur(rows[0]?.stake || 0));
-  $("#ms-nextwin") && ($("#ms-nextwin").textContent = fmtEur(cap0 + rows[0]?.stake*b || 0));
-  $("#ms-nextloss") && ($("#ms-nextloss").textContent = fmtEur(cap0 - rows[0]?.stake || 0));
-  const tb = $("#ms-rows"); if(tb){ tb.innerHTML = ""; for(const r of rows){ const tr = document.createElement("tr"); tr.innerHTML = `
-      <td>${r.i}</td>
-      <td class="right">${fmtEur(r.stake)}</td>
-      <td class="right"><select data-ms-res="${r.i}"><option value="">—</option><option value="W">WIN</option><option value="L">LOSS</option></select></td>
-      <td class="right" data-ms-cap="${r.i}">${fmtEur(r.cap)}</td>
-      <td class="right"><button class="action-btn" data-ms-apply="${r.i}">Apply</button></td>
-    `; tb.appendChild(tr);} 
-    tb.querySelectorAll("[data-ms-apply]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const i = parseInt(btn.getAttribute("data-ms-apply"),10);
-        const sel = tb.querySelector(`[data-ms-res="${i}"]`);
-        const val = sel.value; if(!val) return;
-        const capCell = tb.querySelector(`[data-ms-cap="${i}"]`);
-        const st = rows[i-1].stake; const oldCap = rows[i-1].cap;
-        const newCap = (val==="W") ? oldCap + st*(odds-1) : oldCap - st;
-        if(capCell) capCell.textContent = fmtEur(newCap);
-        if(rows[i]){ rows[i].cap = newCap; const nxt=tb.querySelector(`[data-ms-cap="${i+1}"]`); if(nxt) nxt.textContent = fmtEur(newCap); }
-      });
-    });
-  }
-  State._lastMasa = { name, cap0, target, odds, n, p: p*100, winsDone, rows };
-}
-function saveMasaniello(){
-  if(!State._lastMasa) return alert("Run a system first.");
-  const list = JSON.parse(localStorage.getItem("quantara_masa")||"[]");
-  list.push({ ...State._lastMasa, savedAt: Date.now() });
-  localStorage.setItem("quantara_masa", JSON.stringify(list));
-  loadMasanielloList();
-}
-function loadMasanielloList(){
-  const list = JSON.parse(localStorage.getItem("quantara_masa")||"[]");
-  const sel = $("#ms-load"); if(!sel) return;
-  sel.innerHTML = `<option value="">Load saved…</option>`;
-  list.forEach((it, idx)=>{
-    const opt = document.createElement("option");
-    const dt = new Date(it.savedAt).toLocaleString();
-    opt.value = idx; opt.textContent = `${it.name} — ${dt}`;
-    sel.appendChild(opt);
-  });
-  sel.onchange = ()=>{
-    const i = sel.value; if(i==="") return;
-    const it = list[i];
-    $("#ms-name") && ($("#ms-name").value = it.name);
-    $("#ms-capital") && ($("#ms-capital").value = it.cap0);
-    $("#ms-target") && ($("#ms-target").value = it.target);
-    $("#ms-odds") && ($("#ms-odds").value = it.odds);
-    $("#ms-n") && ($("#ms-n").value = it.n);
-    $("#ms-p") && ($("#ms-p").value = it.p);
-    $("#ms-p-range") && ($("#ms-p-range").value = it.p);
-    $("#ms-wins") && ($("#ms-wins").value = it.winsDone);
-    runMasaniello();
-  };
-}
-function deleteMasaniello(){
-  const sel = $("#ms-load"); if(!sel) return;
-  const i = sel.value; if(i==="") return alert("Select a saved system first.");
-  const list = JSON.parse(localStorage.getItem("quantara_masa")||"[]");
-  list.splice(i,1);
-  localStorage.setItem("quantara_masa", JSON.stringify(list));
-  loadMasanielloList();
-}
-
-// ===============================
-// Utils
-// ===============================
-function computeProfitForBankroll(bkId){
-  const rows = State.bets.filter(b=>b.bankroll_id===bkId && (b.result==="win"||b.result==="loss"||b.result==="void"));
-  return rows.reduce((s,b)=> s+profitOf(b), 0);
-}
+     
