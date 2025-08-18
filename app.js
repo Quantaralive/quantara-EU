@@ -3,7 +3,7 @@
 // Frontend: GitHub Pages (static)
 // Auth/DB: Supabase (anon key)
 // Charts: Chart.js v4
-// Version: v18
+// Version: v19
 // ===============================
 
 // ---- Supabase setup (public anon key is OK for browser apps)
@@ -17,7 +17,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persist
 // ---- Helpers
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-const on = (sel, evt, fn) => { const el = $(sel); if(el) el.addEventListener(evt, fn); }; // safe listener
+const on = (sel, evt, fn) => { const el = $(sel); if(el) el.addEventListener(evt, fn); };
 const fmtEur = (n) => `€${(Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})}`;
 const fmtPct = (n) => `${(Number(n)||0).toFixed(1)}%`;
 
@@ -35,27 +35,23 @@ const State = {
 // Expose router
 window.__go = (t) => switchTab(t);
 
-// Global error catcher so one error doesn't silently kill everything
-window.addEventListener("error", (e)=>{
-  console.error("Global error:", e.error || e.message || e);
-});
-window.addEventListener("unhandledrejection", (e)=>{
-  console.error("Unhandled promise rejection:", e.reason || e);
-});
+// Global error logging
+window.addEventListener("error", (e)=> console.error("Global error:", e.error || e.message || e));
+window.addEventListener("unhandledrejection", (e)=> console.error("Unhandled promise rejection:", e.reason || e));
 
 // ---- Boot
-console.log("Quantara boot v18");
+console.log("Quantara boot v19");
 document.addEventListener("DOMContentLoaded", init);
 
 async function init(){
   try{
     wireAuthUI();
-    wireOverviewControls();   // moved into a safe wrapper
+    wireOverviewControls();
     wireLedgerUI();
     wireEditModal();
     wireBankrollModal();
     wireCalendarUI();
-    wireToolsUI();
+    wireToolsUI(); // safe; returns if elements absent
 
     await refreshAuth();
     switchTab(State.activeTab || "home");
@@ -659,7 +655,7 @@ function renderROI(){
   const profit = settled.reduce((s,b)=> s+profitOf(b), 0);
   const roi = stake>0 ? (profit/stake*100):0;
   $("#roi-overall") && ($("#roi-overall").textContent = fmtPct(roi));
-  $("#roi-settled") && ($("#roi-settled").textContent = settled.length);
+  $("#roi-settled") && ($("#roi-settled").textContent = settled.length));
   $("#roi-profit") && ($("#roi-profit").textContent = fmtEur(profit));
   $("#roi-stake") && ($("#roi-stake").textContent = fmtEur(stake));
 
@@ -756,6 +752,9 @@ function renderDayTable(rows){
 // Tools
 // ===============================
 function wireToolsUI(){
+  // If the Tools UI is not in the DOM, skip
+  if(!$("#tool-btn-risk") && !$("#tool-btn-poisson") && !$("#tool-btn-masa")) return;
+
   on("#tool-btn-risk","click", ()=> showTool("risk"));
   on("#tool-btn-poisson","click", ()=> showTool("poisson"));
   on("#tool-btn-masa","click", ()=> showTool("masa"));
