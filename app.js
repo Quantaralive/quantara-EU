@@ -6,27 +6,29 @@
 // Version: v21
 // ===============================
 
+// ---- Supabase setup (public anon key is OK for browser apps)
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 
-// Supabase v2 (ESM)
+// Supabase v2
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true } });
 
 // ---- DOM helpers
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
-const fmtEur = (n) => `€${(Number(n)||0).toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2})}`;
+const fmtEur = (n) => `€${(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:0, maximumFractionDigits:2})}`;
 const fmtPct = (n) => `${(Number(n)||0).toFixed(1)}%`;
+const sleep  = (ms)=> new Promise(r=>setTimeout(r,ms));
 
 // ---- App state
 const State = {
   user: null,
   activeTab: "home",
   activeBankrollId: localStorage.getItem("quantara_active_bankroll_id") || null,
-  charts: {},   // Chart.js instances
-  bets: [],     // cached bets
-  bankrolls: [],// cached bankrolls
+  charts: {},         // Chart.js instances
+  bets: [],           // cached bets
+  bankrolls: [],      // cached bankrolls
   calendar: { year: new Date().getFullYear(), month: new Date().getMonth() }, // 0..11
 };
 
@@ -46,44 +48,39 @@ async function init(){
   wireToolsUI();
 
   await refreshAuth(); // sets State.user
+  // Guard: if not logged in, push to auth.html
+  if(!State.user){
+    window.location.href = "./auth.html?stay=1";
+    return;
+  }
   switchTab(State.activeTab || "home");
+  await loadEverything();
 }
 
 // ===============================
-// Auth
+// Auth (top-right area now just routes to auth.html)
 // ===============================
 function wireAuthUI(){
-  $("#signup")?.addEventListener("click", async () => {
-    const email = $("#email").value.trim();
-    const password = $("#password").value;
-    if(!email || !password) return alert("Email + password required.");
-    const { error } = await supabase.auth.signUp({ email, password });
-    if(error) return alert(error.message);
-    alert("Check your inbox to confirm your email.");
-  });
-
-  $("#signin")?.addEventListener("click", async () => {
-    const email = $("#email").value.trim();
-    const password = $("#password").value;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if(error) return alert(error.message);
-  });
-
-  $("#send-link")?.addEventListener("click", async () => {
-    const email = $("#email").value.trim();
-    if(!email) return alert("Enter your email.");
-    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href }});
-    if(error) return alert(error.message);
-    alert("Magic link sent.");
-  });
+  // If you kept the email/password inputs in index.html, ignore them here; we use auth.html.
+  $("#signup")?.addEventListener("click", ()=> window.location.href = "./auth.html?stay=1");
+  $("#signin")?.addEventListener("click", ()=> window.location.href = "./auth.html?stay=1");
+  $("#send-link")?.addEventListener("click", ()=> window.location.href = "./auth.html?stay=1");
 
   $("#signout")?.addEventListener("click", async () => {
     await supabase.auth.signOut();
+    // Clear local state + go to auth
+    localStorage.removeItem("quantara_active_bankroll_id");
+    window.location.href = "./auth.html?stay=1";
   });
 
+  // React to auth changes (e.g., token expiry)
   supabase.auth.onAuthStateChange(async (_evt, session) => {
     State.user = session?.user || null;
-    $("#signout").style.display = State.user ? "" : "none";
+    $("#signout") && ($("#signout").style.display = State.user ? "" : "none");
+    if(!State.user){
+      window.location.href = "./auth.html?stay=1";
+      return;
+    }
     await loadEverything();
   });
 }
@@ -91,7 +88,7 @@ function wireAuthUI(){
 async function refreshAuth(){
   const { data } = await supabase.auth.getSession();
   State.user = data.session?.user || null;
-  $("#signout").style.display = State.user ? "" : "none";
+  $("#signout") && ($("#signout").style.display = State.user ? "" : "none");
 }
 
 // ===============================
@@ -119,7 +116,7 @@ function switchTab(tab){
 }
 
 // ===============================
-// Load everything after login or on boot
+// Load everything after login
 // ===============================
 async function loadEverything(){
   await loadBankrolls();
@@ -140,10 +137,7 @@ async function loadEverything(){
 // Bankrolls
 // ===============================
 async function loadBankrolls(){
-  if(!State.user){
-    State.bankrolls = [];
-    return;
-  }
+  if(!State.user){ State.bankrolls = []; return; }
   const { data, error } = await supabase
     .from("bankrolls")
     .select("*")
@@ -243,32 +237,14 @@ window.__clearActive = ()=>{ State.activeBankrollId=null; localStorage.removeIte
 function wireBankrollModal(){
   $("#bk-close")?.addEventListener("click", ()=> $("#bk-modal").classList.add("hidden"));
   $("#bk-cancel")?.addEventListener("click", ()=> $("#bk-modal").classList.add("hidden"));
-
   $("#bk-form")?.addEventListener("submit", async (e)=>{
     e.preventDefault();
-    if(!State.user) return alert("Sign in first (top-right).");
-
+    if(!State.user) return alert("Sign in first.");
     const name = $("#bk-name").value.trim();
     const start = Number($("#bk-start").value||0);
-    if(!name) return alert("Please enter a bankroll name.");
-
-    const createBtn = $("#bk-form .btn.btn-primary");
-    const oldLabel = createBtn?.textContent;
-    if(createBtn){ createBtn.disabled = true; createBtn.textContent = "Creating…"; }
-
-    const { data, error } = await supabase
-      .from("bankrolls")
-      .insert({ user_id: State.user.id, name, start_amount: start })
-      .select();
-
-    if(createBtn){ createBtn.disabled = false; createBtn.textContent = oldLabel; }
-
-    if(error){
-      console.error("Supabase insert error (bankrolls):", error);
-      alert(`Could not create bankroll:\n${error.message}\n\nCheck RLS policies and table columns in Supabase.`);
-      return;
-    }
-
+    if(!name) return;
+    const { error } = await supabase.from("bankrolls").insert({ user_id: State.user.id, name, start_amount: start });
+    if(error) return alert(error.message);
     $("#bk-modal").classList.add("hidden");
     await loadBankrolls(); renderHome();
   });
@@ -283,10 +259,7 @@ function currentBk(){
 // Bets
 // ===============================
 async function loadBets(){
-  if(!State.user){
-    State.bets = [];
-    return;
-  }
+  if(!State.user){ State.bets = []; return; }
   const { data, error } = await supabase
     .from("bets")
     .select("*")
@@ -325,7 +298,6 @@ function wireLedgerUI(){
   });
 }
 
-// Overview & charts
 function renderOverview(){
   const bk = currentBk();
   $("#bk-name-inline").textContent = bk?.name || "—";
@@ -353,7 +325,7 @@ function renderOverview(){
   $("#staked").textContent = fmtEur(staked);
   $("#winrate").textContent = fmtPct(wr);
 
-  // equity curve on settled days
+  // chart data: cumulative bankroll by date
   const points = [];
   let bal = Number(bk.start_amount||0);
   const byDate = {};
@@ -382,15 +354,26 @@ $("#save-bankroll")?.addEventListener("click", async ()=>{
 
 function renderBankrollChart(points){
   const ctx = $("#bankrollChart");
-  if(!ctx) return;
   if(State.charts.bankroll) State.charts.bankroll.destroy();
   State.charts.bankroll = new Chart(ctx, {
     type: "line",
-    data: { datasets: [{ label: "Bankroll", data: points, tension: .35, borderWidth: 2, fill: true }] },
+    data: {
+      datasets: [{
+        label: "Bankroll",
+        data: points,
+        tension: .35,
+        borderWidth: 2,
+        fill: true
+      }]
+    },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
       scales: { x: { type: "time", time: { unit: "day" }}, y: { beginAtZero: false }},
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => fmtEur(ctx.parsed.y) } } }
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtEur(ctx.parsed.y) } }
+      }
     }
   });
 }
@@ -407,7 +390,6 @@ function profitOf(b){
 let LedgerFilter = { monthKey: "ALL" }; // YYYY-MM
 function renderMonthTabs(bets){
   const wrap = $("#month-tabs");
-  if(!wrap) return;
   wrap.innerHTML = "";
   const btnAll = document.createElement("button");
   btnAll.className = "month-tab" + (LedgerFilter.monthKey==="ALL"?" active":"");
@@ -425,6 +407,7 @@ function renderMonthTabs(bets){
     wrap.appendChild(btn);
   }
 }
+
 function groupByMonth(bets){
   const map = {};
   for(const b of bets){
@@ -438,7 +421,6 @@ const sumPnl = (arr)=> arr.reduce((s,b)=> s+profitOf(b), 0);
 
 function renderLedger(bets){
   const tbody = $("#ledger tbody");
-  if(!tbody) return;
   tbody.innerHTML = "";
   let rows = bets;
   if(LedgerFilter.monthKey!=="ALL"){
@@ -549,7 +531,7 @@ function renderAnalytics(){
   $("#an-pf").textContent = (pf||0).toFixed(2);
   $("#max-dd").textContent = fmtEur(maxDD);
 
-  // Edge/Kelly (approx): edge based on avg odds vs winrate
+  // Edge/Kelly
   const be = avgOdds? (100/avgOdds):0;
   const edge = wr - be;
   const kelly = (()=>{
@@ -622,7 +604,7 @@ function oddsHistogram(bets){
   const buckets = {};
   for(const b of bets){
     const o = Number(b.odds||0); if(!o) continue;
-    const k = (Math.floor(o*10)/10).toFixed(1); // 1.5, 1.6, ...
+    const k = (Math.floor(o*10)/10).toFixed(1);
     buckets[k] = (buckets[k]||0)+1;
   }
   const labels = Object.keys(buckets).sort((a,b)=> parseFloat(a)-parseFloat(b));
@@ -639,7 +621,6 @@ function resultsBreakdown(bets){
 
 function renderBar(canvasSel, key, {labels, values}, isPct=false){
   const ctx = $(canvasSel);
-  if(!ctx) return;
   if(State.charts[key]) State.charts[key].destroy();
   State.charts[key] = new Chart(ctx, {
     type: "bar",
@@ -653,7 +634,6 @@ function renderBar(canvasSel, key, {labels, values}, isPct=false){
 }
 function renderPie(canvasSel, key, {labels, values}){
   const ctx = $(canvasSel);
-  if(!ctx) return;
   if(State.charts[key]) State.charts[key].destroy();
   State.charts[key] = new Chart(ctx, {
     type: "pie",
@@ -662,7 +642,6 @@ function renderPie(canvasSel, key, {labels, values}){
   });
 }
 function computeMaxDrawdown(bk, settled){
-  // equity curve on settled dates
   let bal = Number(bk.start_amount||0);
   const pts = [];
   const byDate = {};
@@ -794,6 +773,7 @@ function wireToolsUI(){
   $("#tool-btn-poisson")?.addEventListener("click", ()=> showTool("poisson"));
   $("#tool-btn-masa")?.addEventListener("click", ()=> showTool("masa"));
 
+  // Sync number + range
   const link = (numSel, rangeSel) => {
     const num = $(numSel), rng=$(rangeSel);
     if(!num || !rng) return;
@@ -838,21 +818,20 @@ function runRisk(){
   const b = odds-1, q = 1-p;
   const kelly = b>0 ? Math.max(0, (b*p - q)/b) : 0;
   const kellyPct = kelly*100;
-
-  $("#rk-be").textContent    = `${be.toFixed(2)}%`;
-  $("#rk-edge").textContent  = `${edge.toFixed(2)}%`;
-  $("#rk-ev").textContent    = fmtEur(evPer1);
+  $("#rk-be").textContent = `${be.toFixed(2)}%`;
+  $("#rk-edge").textContent = `${edge.toFixed(2)}%`;
+  $("#rk-ev").textContent = fmtEur(evPer1);
   $("#rk-kelly").textContent = `${kellyPct.toFixed(2)}%`;
 
-  const flat   = BR*0.01;
-  const halfK  = BR * (kelly/2);
+  // stakes: flat 1%, half Kelly, capped Kelly
+  const flat = BR*0.01;
+  const halfK = BR * (kelly/2);
   const capped = BR * Math.min(kelly, capPct);
 
   renderBarSimple("rkStakeChart","Stake size",["Flat 1%","Half Kelly","Capped Kelly"],[flat,halfK,capped]);
 }
 function renderBarSimple(canvasId,label,labels,values){
   const ctx = document.getElementById(canvasId);
-  if(!ctx) return;
   const key = canvasId;
   if(State.charts[key]) State.charts[key].destroy();
   State.charts[key] = new Chart(ctx, {
@@ -893,9 +872,9 @@ function runPoisson(){
     if(tg>ouLine) over += totalGoals[tg];
   }
 
-  $("#ps-ph").textContent   = fmtPct(ph*100);
-  $("#ps-pd").textContent   = fmtPct(pd*100);
-  $("#ps-pa").textContent   = fmtPct(pa*100);
+  $("#ps-ph").textContent = fmtPct(ph*100);
+  $("#ps-pd").textContent = fmtPct(pd*100);
+  $("#ps-pa").textContent = fmtPct(pa*100);
   $("#ps-over").textContent = fmtPct(over*100);
   $("#ps-btts").textContent = fmtPct(btts*100);
 
@@ -947,11 +926,11 @@ function runMasaniello(){
     rows.push({ i, stake, result: "", cap });
   }
 
-  $("#ms-q").textContent      = `${Math.round(p*n)} (est.)`;
-  $("#ms-rem").textContent    = `${n - winsDone}`;
-  $("#ms-stake").textContent  = fmtEur(rows[0]?.stake || 0);
-  $("#ms-nextwin").textContent= fmtEur(cap0 + rows[0]?.stake*b || 0);
-  $("#ms-nextloss").textContent=fmtEur(cap0 - rows[0]?.stake || 0);
+  $("#ms-q").textContent = `${Math.round(p*n)} (est.)`;
+  $("#ms-rem").textContent = `${n - winsDone}`;
+  $("#ms-stake").textContent = fmtEur(rows[0]?.stake || 0);
+  $("#ms-nextwin").textContent = fmtEur(cap0 + rows[0]?.stake*b || 0);
+  $("#ms-nextloss").textContent = fmtEur(cap0 - rows[0]?.stake || 0);
 
   const tb = $("#ms-rows"); tb.innerHTML = "";
   for(const r of rows){
@@ -959,13 +938,7 @@ function runMasaniello(){
     tr.innerHTML = `
       <td>${r.i}</td>
       <td class="right">${fmtEur(r.stake)}</td>
-      <td class="right">
-        <select data-ms-res="${r.i}">
-          <option value="">—</option>
-          <option value="W">WIN</option>
-          <option value="L">LOSS</option>
-        </select>
-      </td>
+      <td class="right"><select data-ms-res="${r.i}"><option value="">—</option><option value="W">WIN</option><option value="L">LOSS</option></select></td>
       <td class="right" data-ms-cap="${r.i}">${fmtEur(r.cap)}</td>
       <td class="right"><button class="action-btn" data-ms-apply="${r.i}">Apply</button></td>
     `;
