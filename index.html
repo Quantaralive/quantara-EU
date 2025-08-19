@@ -1,448 +1,478 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Quantara — AI Betting Diary</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QUANTARA — AI Betting Diary</title>
 
-  <!-- Styles -->
+  <!-- Fonts & CSS -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Chart.js (v4) -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <!-- Time scale date adapter (needed for x: { type: 'time' }) -->
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- Time scale adapter for Chart.js 'time' axis -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+
+  <!-- Tiny inline favicon -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%237c3aed'/%3E%3C/svg%3E">
 </head>
 <body>
+  <!-- Background -->
+  <div class="bg"><div class="bg-glow"></div><div class="bg-grid"></div></div>
 
-  <!-- Top bar: Brand + Auth -->
+  <!-- Top bar -->
   <header class="topbar">
-    <div class="brand">QUANTARA</div>
+    <div class="brand">
+      <div class="logo-dot"></div>
+      <div class="brand-text">
+        <span class="brand-name">QUANTARA</span>
+        <span class="brand-tag">AI Betting Diary</span>
+      </div>
+    </div>
     <div class="auth">
-      <!-- Auth inputs (stay in DOM always; app toggles visibility) -->
-      <input id="email" type="email" placeholder="Email" />
-      <input id="password" type="password" placeholder="Password" />
-      <button id="signup" class="btn">Sign up</button>
-      <button id="signin" class="btn">Sign in</button>
-      <button id="send-link" class="btn btn-ghost">Magic link</button>
-      <!-- Legacy signout toggle (must exist) -->
-      <button id="signout" class="btn btn-ghost" style="display:none;">Sign out</button>
-      <!-- User menu gets injected here by app.js -->
+      <input id="email" type="email" placeholder="you@example.com" />
+      <input id="password" type="password" placeholder="password" />
+      <button id="signup"  type="button" class="btn btn-ghost">Sign up</button>
+      <button id="signin"  type="button" class="btn btn-primary">Sign in</button>
+      <button id="send-link" type="button" class="btn btn-ghost">Magic link</button>
+      <button id="signout" style="display:none;" type="button" class="btn btn-ghost">Sign out</button>
     </div>
   </header>
 
-  <!-- Tabs -->
-  <nav class="tabs">
-    <button id="tab-btn-home" class="tab active" onclick="__go('home')">Home</button>
-    <button id="tab-btn-overview" class="tab" onclick="__go('overview')">Overview</button>
-    <button id="tab-btn-analytics" class="tab" onclick="__go('analytics')">Analytics</button>
-    <button id="tab-btn-roi" class="tab" onclick="__go('roi')">ROI</button>
-    <button id="tab-btn-calendar" class="tab" onclick="__go('calendar')">Calendar</button>
-    <button id="tab-btn-tools" class="tab" onclick="__go('tools')">Tools</button>
-  </nav>
-
   <main class="container">
-
-    <!-- ========== HOME ========== -->
-    <section id="tab-home">
-      <div class="row">
-        <div class="col">
-          <h2>Bankrolls</h2>
-          <div class="subline">Current selection: <b id="current-bk">None selected</b></div>
-        </div>
-        <div class="col right">
-          <button class="btn" onclick="__openBkModal()">New bankroll</button>
-          <button class="btn btn-ghost" onclick="__clearActive()">Clear selection</button>
-        </div>
-      </div>
-
-      <div id="bankroll-grid" class="grid bankroll-grid">
-        <!-- bankroll cards rendered here -->
-      </div>
-    </section>
-
-    <!-- New Bankroll Modal -->
-    <div id="bk-modal" class="modal hidden">
-      <div class="modal-card">
-        <div class="modal-head">
-          <h3>New bankroll</h3>
-          <button id="bk-close" class="btn btn-ghost">✕</button>
-        </div>
-        <form id="bk-form" class="form">
-          <label>Name
-            <input id="bk-name" type="text" placeholder="e.g. Soccer 2025" required />
-          </label>
-          <label>Start amount
-            <input id="bk-start" type="number" inputmode="decimal" step="0.01" placeholder="1000" />
-          </label>
-          <div class="row right">
-            <button id="bk-cancel" type="button" class="btn btn-ghost">Cancel</button>
-            <button type="submit" class="btn">Create</button>
-          </div>
-        </form>
-      </div>
+    <!-- Tabs -->
+    <div class="tabs">
+      <button id="tab-btn-home"      class="tab active" onclick="window.__go('home')">Home</button>
+      <button id="tab-btn-overview"  class="tab" onclick="window.__go('overview')">Overview</button>
+      <button id="tab-btn-analytics" class="tab" onclick="window.__go('analytics')">Analytics</button>
+      <button id="tab-btn-roi"       class="tab" onclick="window.__go('roi')">ROI</button>
+      <button id="tab-btn-calendar"  class="tab" onclick="window.__go('calendar')">Calendar</button>
+      <button id="tab-btn-tools"     class="tab" onclick="window.__go('tools')">Tools</button>
     </div>
 
-    <!-- ========== OVERVIEW ========== -->
-    <section id="tab-overview" class="hidden">
-      <h2>Overview — <span id="bk-name-inline">—</span></h2>
+    <!-- HOME -->
+    <div id="tab-home">
+      <section class="cards header-actions">
+        <div class="card span-2">
+          <div class="card-label">Current bankroll</div>
+          <div class="current-bk" id="current-bk">None selected</div>
+          <div class="muted small">Choose a bankroll to work in. You can create multiple bankrolls for different strategies.</div>
+        </div>
+        <div class="card actions-right">
+          <button id="btn-new-bankroll" class="btn btn-primary" onclick="window.__openBkModal()">New bankroll</button>
+          <button id="btn-clear-active" class="btn btn-ghost" onclick="window.__clearActive()">Clear selection</button>
+        </div>
+      </section>
 
-      <!-- KPIs -->
-      <div class="grid kpi-grid">
-        <div class="kpi">
-          <div class="kpi-label">Bankroll</div>
-          <div id="bankroll" class="kpi-value">€0</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Total staked</div>
-          <div id="staked" class="kpi-value">€0</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Win rate</div>
-          <div id="winrate" class="kpi-value">0%</div>
-        </div>
-        <div class="kpi">
-          <div class="kpi-label">Start amount for <span id="bk-name-inline-2">—</span></div>
-          <div class="row">
-            <input id="bankroll-start" type="number" inputmode="decimal" step="0.01" />
-            <button id="save-bankroll" class="btn">Save</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bankroll chart -->
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Bankroll over time</h3>
-        </div>
-        <div class="chart-wrap">
-          <canvas id="bankrollChart" height="140"></canvas>
-        </div>
-      </div>
-
-      <!-- Add bet form -->
-      <div class="panel">
-        <div class="panel-head">
-          <h3>Add bet</h3>
-        </div>
-        <form id="add-form" class="form grid form-grid">
-          <label>Date
-            <input id="f-date" type="date" />
-          </label>
-          <label>Sport
-            <input id="f-sport" type="text" placeholder="Soccer" />
-          </label>
-          <label>League
-            <input id="f-league" type="text" placeholder="Serie A" />
-          </label>
-          <label>Market
-            <input id="f-market" type="text" placeholder="1X2" />
-          </label>
-          <label>Selection
-            <input id="f-selection" type="text" placeholder="Inter" />
-          </label>
-          <label>Odds
-            <input id="f-odds" type="number" step="0.01" inputmode="decimal" placeholder="1.90" />
-          </label>
-          <label>Stake
-            <input id="f-stake" type="number" step="0.01" inputmode="decimal" placeholder="10" />
-          </label>
-          <label>Result
-            <select id="f-result">
-              <option value="pending">pending</option>
-              <option value="win">win</option>
-              <option value="loss">loss</option>
-              <option value="void">void</option>
-            </select>
-          </label>
-          <div class="row right full">
-            <button class="btn" type="submit">Add</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- Month filter tabs -->
-      <div id="month-tabs" class="month-tabs">
-        <!-- buttons rendered by JS -->
-      </div>
-
-      <!-- Ledger table -->
-      <div class="table-wrap">
-        <table id="ledger" class="table">
-          <thead>
-            <tr>
-              <th>Date</th><th>Sport</th><th>League</th><th>Market</th><th>Selection</th>
-              <th class="right">Odds</th><th class="right">Stake</th><th>Result</th><th class="right">P/L</th><th class="right">Actions</th>
-            </tr>
-          </thead>
-          <tbody><!-- rows --></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- Edit Bet Modal -->
-    <div id="edit-modal" class="modal hidden">
-      <div class="modal-card">
-        <div class="modal-head">
-          <h3>Edit bet</h3>
-          <button id="edit-close" class="btn btn-ghost">✕</button>
-        </div>
-        <form id="edit-form" class="form grid form-grid">
-          <input id="e-id" type="hidden" />
-          <label>Date
-            <input id="e-date" type="date" />
-          </label>
-          <label>Sport
-            <input id="e-sport" type="text" />
-          </label>
-          <label>League
-            <input id="e-league" type="text" />
-          </label>
-          <label>Market
-            <input id="e-market" type="text" />
-          </label>
-          <label>Selection
-            <input id="e-selection" type="text" />
-          </label>
-          <label>Odds
-            <input id="e-odds" type="number" step="0.01" inputmode="decimal" />
-          </label>
-          <label>Stake
-            <input id="e-stake" type="number" step="0.01" inputmode="decimal" />
-          </label>
-          <label>Result
-            <select id="e-result">
-              <option value="pending">pending</option>
-              <option value="win">win</option>
-              <option value="loss">loss</option>
-              <option value="void">void</option>
-            </select>
-          </label>
-          <div class="row right full">
-            <button id="edit-cancel" type="button" class="btn btn-ghost">Cancel</button>
-            <button type="submit" class="btn">Save</button>
-          </div>
-        </form>
-      </div>
+      <section>
+        <div class="section-title">Your bankrolls</div>
+        <div id="bankroll-grid" class="bankroll-grid"></div>
+      </section>
     </div>
 
-    <!-- ========== ANALYTICS ========== -->
-    <section id="tab-analytics" class="hidden">
-      <h2>Analytics — <span id="bk-name-inline-2">—</span></h2>
-
-      <div class="grid kpi-grid">
-        <div class="kpi"><div class="kpi-label">Net profit</div><div id="an-net-profit" class="kpi-value">€0</div></div>
-        <div class="kpi"><div class="kpi-label">Total staked</div><div id="an-staked" class="kpi-value">€0</div></div>
-        <div class="kpi"><div class="kpi-label">Avg stake</div><div id="avg-stake" class="kpi-value">€0</div></div>
-        <div class="kpi"><div class="kpi-label">Avg odds</div><div id="avg-odds" class="kpi-value">0.00</div></div>
-        <div class="kpi"><div class="kpi-label">Win rate</div><div id="an-winrate" class="kpi-value">0%</div></div>
-        <div class="kpi"><div class="kpi-label">Profit factor</div><div id="an-pf" class="kpi-value">0.00</div></div>
-        <div class="kpi"><div class="kpi-label">Max drawdown</div><div id="max-dd" class="kpi-value">€0</div></div>
-        <div class="kpi"><div class="kpi-label">Edge / Kelly%</div><div id="edge" class="kpi-value">0.00% / 0.00%</div></div>
-      </div>
-
-      <div class="grid chart-grid">
-        <div class="panel"><h3>P/L by sport</h3><div class="chart-wrap"><canvas id="pnlBySportChart" height="160"></canvas></div></div>
-        <div class="panel"><h3>Win rate by sport</h3><div class="chart-wrap"><canvas id="winRateBySportChart" height="160"></canvas></div></div>
-        <div class="panel"><h3>P/L by month</h3><div class="chart-wrap"><canvas id="pnlMonthChart" height="160"></canvas></div></div>
-        <div class="panel"><h3>P/L by weekday</h3><div class="chart-wrap"><canvas id="weekdayChart" height="160"></canvas></div></div>
-        <div class="panel"><h3>Odds histogram</h3><div class="chart-wrap"><canvas id="oddsHistChart" height="160"></canvas></div></div>
-        <div class="panel"><h3>Results breakdown</h3><div class="chart-wrap"><canvas id="resultsPieChart" height="160"></canvas></div></div>
-      </div>
-    </section>
-
-    <!-- ========== ROI ========== -->
-    <section id="tab-roi" class="hidden">
-      <h2>ROI</h2>
-      <div class="grid kpi-grid">
-        <div class="kpi"><div class="kpi-label">Overall ROI</div><div id="roi-overall" class="kpi-value">0%</div></div>
-        <div class="kpi"><div class="kpi-label">Settled bets</div><div id="roi-settled" class="kpi-value">0</div></div>
-        <div class="kpi"><div class="kpi-label">Profit</div><div id="roi-profit" class="kpi-value">€0</div></div>
-        <div class="kpi"><div class="kpi-label">Stake</div><div id="roi-stake" class="kpi-value">€0</div></div>
-      </div>
-
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr><th>Sport</th><th class="right">Bets</th><th class="right">Stake</th><th class="right">Profit</th><th class="right">ROI</th></tr>
-          </thead>
-          <tbody id="roi-tbody"><!-- rows --></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ========== CALENDAR ========== -->
-    <section id="tab-calendar" class="hidden">
-      <div class="row">
-        <h2>Calendar</h2>
-        <div class="spacer"></div>
-        <button id="cal-prev" class="btn btn-ghost">◀</button>
-        <div id="cal-title" class="pill">—</div>
-        <button id="cal-next" class="btn btn-ghost">▶</button>
-      </div>
-
-      <div id="calendar-grid" class="calendar-grid"><!-- days --></div>
-
-      <div class="panel">
-        <div class="row">
-          <h3>Day details</h3>
-          <div class="spacer"></div>
-          <button id="clear-filter" class="btn btn-ghost">Clear</button>
+    <!-- OVERVIEW -->
+    <div id="tab-overview" class="hidden">
+      <section class="cards">
+        <div class="card"><div class="card-label">Bankroll</div><div class="card-value" id="bankroll">€0</div></div>
+        <div class="card"><div class="card-label">Total staked</div><div class="card-value" id="staked">€0</div></div>
+        <div class="card"><div class="card-label">Win rate</div><div class="card-value" id="winrate">0%</div></div>
+        <div class="card settings">
+          <div class="card-label">Starting Bankroll (€) for <span id="bk-name-inline">—</span></div>
+          <div class="settings-row">
+            <input id="bankroll-start" type="number" step="1" placeholder="10000" />
+            <button id="save-bankroll" class="btn btn-primary">Save</button>
+          </div>
+          <div class="muted small">Saved in Supabase, tied to this bankroll.</div>
         </div>
-        <div class="row">
-          <div class="muted">Selected:</div>
-          <div id="day-selected" class="pill">—</div>
-          <div class="muted">PnL:</div>
-          <div id="day-pnl" class="pill">€0</div>
+      </section>
+
+      <section class="charts">
+        <div class="chart-card">
+          <div class="chart-title">Bankroll over time</div>
+          <canvas id="bankrollChart"></canvas>
         </div>
+      </section>
+
+      <section class="entry">
+        <form id="add-form" class="add-form">
+          <div class="form-title">Add bet to <span id="bk-name-inline-2">—</span></div>
+          <input type="date" id="f-date" required />
+          <input type="text" id="f-sport" placeholder="Football" required />
+          <input type="text" id="f-league" placeholder="Serie A" />
+          <input type="text" id="f-market" placeholder="Over 2.5" />
+          <input type="text" id="f-selection" placeholder="Lecce-Genoa" />
+          <input type="number" step="0.01" id="f-odds" placeholder="1.85" required />
+          <input type="number" step="1" id="f-stake" placeholder="100" required />
+          <select id="f-result">
+            <option value="pending">pending</option>
+            <option value="win">win</option>
+            <option value="loss">loss</option>
+            <option value="void">void</option>
+          </select>
+          <button type="submit" class="btn btn-primary">Save bet</button>
+        </form>
+      </section>
+
+      <section class="ledger-section">
+        <div class="section-title">Ledger</div>
+        <div id="month-tabs" class="month-tabs"></div>
         <div class="table-wrap">
-          <table class="table">
+          <table id="ledger">
             <thead>
-              <tr><th>Sport</th><th>Market</th><th>Selection</th><th class="right">Odds</th><th class="right">Stake</th><th class="right">Result</th><th class="right">P/L</th></tr>
+              <tr>
+                <th>Date</th><th>Sport</th><th>League</th><th>Market</th>
+                <th>Selection</th><th>Odds</th><th>Stake</th><th>Result</th><th>Profit</th>
+                <th class="right">Actions</th>
+              </tr>
             </thead>
-            <tbody id="day-tbody"><!-- rows --></tbody>
+            <tbody></tbody>
           </table>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
 
-    <!-- ========== TOOLS ========== -->
-    <section id="tab-tools" class="hidden">
-      <h2>Tools</h2>
+    <!-- ANALYTICS -->
+    <div id="tab-analytics" class="hidden">
+      <section class="cards">
+        <div class="card"><div class="card-label">Net Profit</div><div class="card-value" id="an-net-profit">€0</div></div>
+        <div class="card"><div class="card-label">Win rate</div><div class="card-value" id="an-winrate">0%</div></div>
+        <div class="card"><div class="card-label">Profit factor</div><div class="card-value" id="an-pf">0.00</div></div>
+        <div class="card"><div class="card-label">Max drawdown</div><div class="card-value" id="max-dd">€0</div></div>
+      </section>
 
-      <div class="tools-nav">
-        <span id="tool-btn-risk" class="chip active">Risk</span>
-        <span id="tool-btn-poisson" class="chip">Poisson</span>
-        <span id="tool-btn-masa" class="chip">Masaniello</span>
-      </div>
+      <section class="cards" style="margin-top:12px;">
+        <div class="card"><div class="card-label">Total staked</div><div class="card-value" id="an-staked">€0</div></div>
+        <div class="card"><div class="card-label">Avg stake</div><div class="card-value" id="avg-stake">€0</div></div>
+        <div class="card"><div class="card-label">Avg odds</div><div class="card-value" id="avg-odds">0.00</div></div>
+        <div class="card"><div class="card-label">Edge / Kelly</div><div class="card-value" id="edge">0.00% / 0.00%</div></div>
+      </section>
 
-      <!-- Risk -->
-      <div id="tools-risk">
-        <div class="grid form-grid">
-          <label>Bankroll
-            <input id="rk-bankroll" type="number" step="0.01" inputmode="decimal" placeholder="1000" />
-          </label>
-          <label>Odds
-            <input id="rk-odds" type="number" step="0.01" inputmode="decimal" placeholder="1.90" />
-          </label>
-          <label>Win probability (%)
-            <input id="rk-prob" type="number" step="0.1" inputmode="decimal" placeholder="55" />
-            <input id="rk-prob-range" type="range" min="0" max="100" step="0.1" />
-          </label>
-          <label>Cap stake (% of BR)
-            <input id="rk-cap" type="number" step="0.1" inputmode="decimal" placeholder="2.5" />
-            <input id="rk-cap-range" type="range" min="0" max="100" step="0.1" />
-          </label>
-          <div class="row right full">
-            <button id="rk-run" class="btn">Run</button>
-          </div>
+      <section class="analytics-charts tidy">
+        <div class="chart-card span-2 tall">
+          <div class="chart-title">P&L by sport</div>
+          <canvas id="pnlBySportChart"></canvas>
         </div>
-
-        <div class="grid kpi-grid">
-          <div class="kpi"><div class="kpi-label">Break-even</div><div id="rk-be" class="kpi-value">0%</div></div>
-          <div class="kpi"><div class="kpi-label">Edge</div><div id="rk-edge" class="kpi-value">0%</div></div>
-          <div class="kpi"><div class="kpi-label">EV per €1</div><div id="rk-ev" class="kpi-value">€0</div></div>
-          <div class="kpi"><div class="kpi-label">Kelly%</div><div id="rk-kelly" class="kpi-value">0%</div></div>
+        <div class="chart-card">
+          <div class="chart-title">Win rate by sport</div>
+          <canvas id="winRateBySportChart"></canvas>
         </div>
-
-        <div class="panel">
-          <h3>Stake sizing</h3>
-          <div class="chart-wrap"><canvas id="rkStakeChart" height="160"></canvas></div>
+        <div class="chart-card">
+          <div class="chart-title">Monthly P&L</div>
+          <canvas id="pnlMonthChart"></canvas>
         </div>
-      </div>
-
-      <!-- Poisson -->
-      <div id="tools-poisson" class="hidden">
-        <div class="grid form-grid">
-          <label>Home λ (avg goals)
-            <input id="ps-home" type="number" step="0.01" inputmode="decimal" placeholder="1.40" />
-          </label>
-          <label>Away λ (avg goals)
-            <input id="ps-away" type="number" step="0.01" inputmode="decimal" placeholder="1.10" />
-          </label>
-          <label>O/U line
-            <input id="ps-ouline" type="number" step="0.5" inputmode="decimal" placeholder="2.5" />
-          </label>
-          <div class="row right full">
-            <button id="ps-run" class="btn">Run</button>
-          </div>
+        <div class="chart-card">
+          <div class="chart-title">Profit by weekday</div>
+          <canvas id="weekdayChart"></canvas>
         </div>
-
-        <div class="grid kpi-grid">
-          <div class="kpi"><div class="kpi-label">Home win</div><div id="ps-ph" class="kpi-value">0%</div></div>
-          <div class="kpi"><div class="kpi-label">Draw</div><div id="ps-pd" class="kpi-value">0%</div></div>
-          <div class="kpi"><div class="kpi-label">Away win</div><div id="ps-pa" class="kpi-value">0%</div></div>
-          <div class="kpi"><div class="kpi-label">Over</div><div id="ps-over" class="kpi-value">0%</div></div>
-          <div class="kpi"><div class="kpi-label">BTTS Yes</div><div id="ps-btts" class="kpi-value">0%</div></div>
+        <div class="chart-card">
+          <div class="chart-title">Odds distribution</div>
+          <canvas id="oddsHistChart"></canvas>
         </div>
-
-        <div class="grid chart-grid">
-          <div class="panel"><h3>1X2 probabilities</h3><div class="chart-wrap"><canvas id="ps1x2Chart" height="160"></canvas></div></div>
-          <div class="panel"><h3>Total goals distribution</h3><div class="chart-wrap"><canvas id="psGoalsChart" height="160"></canvas></div></div>
-          <div class="panel"><h3>BTTS</h3><div class="chart-wrap"><canvas id="psBttsChart" height="160"></canvas></div></div>
+        <div class="chart-card">
+          <div class="chart-title">Results breakdown</div>
+          <canvas id="resultsPieChart"></canvas>
         </div>
+      </section>
+    </div>
 
+    <!-- ROI -->
+    <div id="tab-roi" class="hidden">
+      <section class="cards">
+        <div class="card"><div class="card-label">Overall ROI</div><div class="card-value" id="roi-overall">0%</div></div>
+        <div class="card"><div class="card-label">Settled Bets</div><div class="card-value" id="roi-settled">0</div></div>
+        <div class="card"><div class="card-label">Profit (Settled)</div><div class="card-value" id="roi-profit">€0</div></div>
+        <div class="card"><div class="card-label">Stake (Settled)</div><div class="card-value" id="roi-stake">€0</div></div>
+      </section>
+
+      <section class="ledger-section">
+        <div class="section-title">ROI by sport</div>
         <div class="table-wrap">
-          <table class="table">
-            <thead><tr><th>Market</th><th class="right">Prob</th><th class="right">Fair odds</th></tr></thead>
-            <tbody id="ps-table"><!-- rows --></tbody>
+          <table id="roi-table">
+            <thead>
+              <tr>
+                <th>Sport</th>
+                <th class="right">Bets</th>
+                <th class="right">Stake</th>
+                <th class="right">Profit</th>
+                <th class="right">ROI</th>
+              </tr>
+            </thead>
+            <tbody id="roi-tbody"></tbody>
           </table>
         </div>
-      </div>
+      </section>
+    </div>
 
-      <!-- Masaniello -->
-      <div id="tools-masa" class="hidden">
-        <div class="grid form-grid">
-          <label>Name
-            <input id="ms-name" type="text" placeholder="My System" />
-          </label>
-          <label>Capital
-            <input id="ms-capital" type="number" step="0.01" inputmode="decimal" placeholder="500" />
-          </label>
-          <label>Target profit
-            <input id="ms-target" type="number" step="0.01" inputmode="decimal" placeholder="50" />
-          </label>
-          <label>Odds
-            <input id="ms-odds" type="number" step="0.01" inputmode="decimal" placeholder="1.80" />
-          </label>
-          <label># Bets
-            <input id="ms-n" type="number" inputmode="numeric" placeholder="10" />
-          </label>
-          <label>Win prob (%)
-            <input id="ms-p" type="number" step="0.1" inputmode="decimal" placeholder="55" />
-            <input id="ms-p-range" type="range" min="0" max="100" step="0.1" />
-          </label>
-          <label>Wins done
-            <input id="ms-wins" type="number" inputmode="numeric" placeholder="0" />
-          </label>
-          <div class="row right full">
-            <button id="ms-run" class="btn">Run</button>
-            <select id="ms-load" class="btn btn-ghost"><option>Load saved…</option></select>
-            <button id="ms-save" class="btn btn-ghost">Save</button>
-            <button id="ms-delete" class="btn btn-ghost">Delete saved</button>
+    <!-- CALENDAR -->
+    <div id="tab-calendar" class="hidden">
+      <section class="calendar card">
+        <div class="calendar-header">
+          <button id="cal-prev" class="btn btn-ghost">‹</button>
+          <div id="cal-title" class="calendar-title">Month YYYY</div>
+          <button id="cal-next" class="btn btn-ghost">›</button>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+
+        <div class="day-summary">
+          <div class="day-summary-title">Day summary</div>
+          <div class="day-summary-row">
+            <div id="day-selected">—</div>
+            <div id="day-pnl" class="pill">€0</div>
           </div>
         </div>
 
-        <div class="grid kpi-grid">
-          <div class="kpi"><div class="kpi-label">Est. wins (q)</div><div id="ms-q" class="kpi-value">0</div></div>
-          <div class="kpi"><div class="kpi-label">Remaining</div><div id="ms-rem" class="kpi-value">0</div></div>
-          <div class="kpi"><div class="kpi-label">Next stake</div><div id="ms-stake" class="kpi-value">€0</div></div>
-          <div class="kpi"><div class="kpi-label">If WIN</div><div id="ms-nextwin" class="kpi-value">€0</div></div>
-          <div class="kpi"><div class="kpi-label">If LOSS</div><div id="ms-nextloss" class="kpi-value">€0</div></div>
-        </div>
-
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr><th>#</th><th class="right">Stake</th><th class="right">Result</th><th class="right">Capital</th><th class="right">Apply</th></tr></thead>
-            <tbody id="ms-rows"><!-- rows --></tbody>
+        <div class="table-wrap mini">
+          <table>
+            <thead>
+              <tr>
+                <th>Sport</th><th>Market</th><th>Selection</th>
+                <th class="right">Odds</th><th class="right">Stake</th><th class="right">Result</th><th class="right">P/L</th>
+              </tr>
+            </thead>
+            <tbody id="day-tbody"></tbody>
           </table>
         </div>
-      </div>
-    </section>
 
+        <div class="calendar-legend">
+          <span class="dot has-bet"></span> dates with bets show P/L in the box
+          <button id="clear-filter" class="btn btn-ghost small">Clear</button>
+        </div>
+      </section>
+    </div>
+
+    <!-- TOOLS -->
+    <div id="tab-tools" class="hidden">
+      <section class="tools-nav">
+        <button id="tool-btn-risk" class="chip active">Risk</button>
+        <button id="tool-btn-poisson" class="chip">Poisson</button>
+        <button id="tool-btn-masa" class="chip">Masaniello</button>
+      </section>
+
+      <!-- Risk panel -->
+      <section id="tools-risk" class="cards">
+        <div class="card span-2">
+          <div class="grid-2">
+            <div class="input-group">
+              <label>Bankroll (€)</label>
+              <input id="rk-bankroll" type="number" step="1" value="10000" />
+            </div>
+            <div class="input-group">
+              <label>Odds</label>
+              <input id="rk-odds" type="number" step="0.01" value="1.85" />
+            </div>
+            <div class="input-group col-span-2">
+              <label>Win probability</label>
+              <div class="slider-row">
+                <input id="rk-prob" type="number" step="0.1" value="55" />
+                <input id="rk-prob-range" type="range" min="0" max="100" step="0.1" value="55" />
+              </div>
+            </div>
+            <div class="input-group col-span-2">
+              <label>Kelly cap (max % bankroll per bet)</label>
+              <div class="slider-row">
+                <input id="rk-cap" type="number" step="0.1" value="3" />
+                <input id="rk-cap-range" type="range" min="0" max="10" step="0.1" value="3" />
+              </div>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button id="rk-run" class="btn btn-primary">Compute</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="grid-2 small-kpis">
+            <div><div class="muted">Breakeven</div><div id="rk-be" class="kpi">0%</div></div>
+            <div><div class="muted">Edge</div><div id="rk-edge" class="kpi">0%</div></div>
+            <div><div class="muted">EV per €1</div><div id="rk-ev" class="kpi">€0</div></div>
+            <div><div class="muted">Kelly (full)</div><div id="rk-kelly" class="kpi">0%</div></div>
+          </div>
+        </div>
+
+        <div class="chart-card span-2">
+          <div class="chart-title">Suggested stakes</div>
+          <canvas id="rkStakeChart"></canvas>
+        </div>
+      </section>
+
+      <!-- Poisson panel -->
+      <section id="tools-poisson" class="hidden">
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">Poisson match model (quick)</div>
+            <div class="grid-2">
+              <div class="input-group">
+                <label>Expected goals — Home λ</label>
+                <input id="ps-home" type="number" step="0.01" value="1.6" />
+              </div>
+              <div class="input-group">
+                <label>Expected goals — Away λ</label>
+                <input id="ps-away" type="number" step="0.01" value="1.1" />
+              </div>
+              <div class="input-group">
+                <label>O/U line</label>
+                <input id="ps-ouline" type="number" step="0.5" value="2.5" />
+              </div>
+            </div>
+            <div class="btn-row">
+              <button id="ps-run" class="btn btn-primary">Compute</button>
+            </div>
+          </div>
+
+          <div class="card kpi-3">
+            <div><div class="muted">Home</div><div id="ps-ph" class="kpi">0%</div></div>
+            <div><div class="muted">Draw</div><div id="ps-pd" class="kpi">0%</div></div>
+            <div><div class="muted">Away</div><div id="ps-pa" class="kpi">0%</div></div>
+          </div>
+
+          <div class="card kpi-2">
+            <div><div class="muted">Over</div><div id="ps-over" class="kpi">0%</div></div>
+            <div><div class="muted">BTTS Yes</div><div id="ps-btts" class="kpi">0%</div></div>
+          </div>
+
+          <div class="chart-grid">
+            <div class="chart-card">
+              <div class="chart-title">1X2 probabilities</div>
+              <canvas id="ps1x2Chart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Total goals distribution</div>
+              <canvas id="psGoalsChart"></canvas>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">BTTS</div>
+              <canvas id="psBttsChart"></canvas>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Market</th><th class="right">Prob.</th><th class="right">Fair odds</th></tr></thead>
+              <tbody id="ps-table"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Masaniello panel -->
+      <section id="tools-masa" class="hidden">
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">Masaniello sequence</div>
+            <div class="grid-3">
+              <div class="input-group">
+                <label>System name</label>
+                <input id="ms-name" type="text" placeholder="My System" />
+              </div>
+              <div class="input-group">
+                <label>Capital (€)</label>
+                <input id="ms-capital" type="number" step="1" value="1000" />
+              </div>
+              <div class="input-group">
+                <label>Target profit (€)</label>
+                <input id="ms-target" type="number" step="1" value="100" />
+              </div>
+              <div class="input-group">
+                <label>Odds</label>
+                <input id="ms-odds" type="number" step="0.01" value="1.85" />
+              </div>
+              <div class="input-group">
+                <label>Number of bets</label>
+                <input id="ms-n" type="number" step="1" value="10" />
+              </div>
+              <div class="input-group col-span-3">
+                <label>Win probability</label>
+                <div class="slider-row">
+                  <input id="ms-p" type="number" step="0.1" value="55" />
+                  <input id="ms-p-range" type="range" min="0" max="100" step="0.1" value="55" />
+                </div>
+              </div>
+              <div class="input-group">
+                <label>Wins already done</label>
+                <input id="ms-wins" type="number" step="1" value="0" />
+              </div>
+            </div>
+            <div class="btn-row">
+              <button id="ms-run" class="btn btn-primary">Start / Recompute</button>
+              <button id="ms-save" class="btn btn-ghost">Save</button>
+              <select id="ms-load" class="btn">
+                <option value="">Load saved…</option>
+              </select>
+              <button id="ms-delete" class="btn btn-ghost">Delete saved</button>
+            </div>
+          </div>
+
+          <div class="card small-kpis">
+            <div><div class="muted">Required wins</div><div id="ms-q" class="kpi">—</div></div>
+            <div><div class="muted">Remaining</div><div id="ms-rem" class="kpi">—</div></div>
+            <div><div class="muted">Next stake</div><div id="ms-stake" class="kpi">—</div></div>
+            <div><div class="muted">Capital if WIN</div><div id="ms-nextwin" class="kpi">—</div></div>
+            <div><div class="muted">Capital if LOSS</div><div id="ms-nextloss" class="kpi">—</div></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th class="right">Stake</th><th class="right">Result</th><th class="right">Capital</th><th class="right">Action</th></tr></thead>
+              <tbody id="ms-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
   </main>
 
-  <!-- App (must be a module because app.js imports Supabase) -->
-  <script type="module" src="app.js"></script>
+  <!-- EDIT BET MODAL -->
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">Edit bet</div>
+        <button id="edit-close" class="btn btn-ghost">×</button>
+      </div>
+      <form id="edit-form" class="edit-form">
+        <input type="hidden" id="e-id" />
+        <input type="date" id="e-date" required />
+        <input type="text" id="e-sport" placeholder="Football" required />
+        <input type="text" id="e-league" placeholder="Serie A" />
+        <input type="text" id="e-market" placeholder="Over 2.5" />
+        <input type="text" id="e-selection" placeholder="Lecce-Genoa" />
+        <input type="number" step="0.01" id="e-odds" placeholder="1.85" required />
+        <input type="number" step="1" id="e-stake" placeholder="100" required />
+        <select id="e-result">
+          <option value="pending">pending</option>
+          <option value="win">win</option>
+          <option value="loss">loss</option>
+          <option value="void">void</option>
+        </select>
+        <div class="edit-actions">
+          <button type="button" id="edit-cancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- NEW BANKROLL MODAL -->
+  <div id="bk-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div class="modal-title">New bankroll</div>
+        <button id="bk-close" class="btn btn-ghost">×</button>
+      </div>
+      <form id="bk-form" class="edit-form">
+        <input type="text" id="bk-name" placeholder="e.g. Serie A Strategy" required />
+        <input type="number" step="1" id="bk-start" placeholder="Starting € e.g. 5000" required />
+        <div class="edit-actions">
+          <button type="button" id="bk-cancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Script -->
+  <script type="module" src="app.js?v=21"></script>
 </body>
 </html>
