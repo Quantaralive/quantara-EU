@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Supabase Quick Test</title>
+<style>
+  body{font-family:system-ui,Arial;padding:20px;background:#0b1020;color:#e6eefc}
+  .row{margin:10px 0}
+  input{width:300px;height:36px;border-radius:8px;border:1px solid #334155;background:#11172c;color:#e6eefc;padding:0 10px}
+  button{height:36px;border-radius:8px;background:#202a46;color:#e6eefc;border:1px solid #334155;cursor:pointer;padding:0 12px}
+  pre{background:#0e1427;border:1px solid #334155;padding:12px;border-radius:10px;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<h1>Supabase Quick Test</h1>
+
+<div class="row">
+  <input id="email" placeholder="you@example.com" />
+  <input id="password" type="password" placeholder="password" />
+</div>
+<div class="row">
+  <button id="signup">Sign up</button>
+  <button id="signin">Sign in</button>
+  <button id="signout">Sign out</button>
+</div>
+
+<hr/>
+
+<div class="row">
+  <input id="bkname" placeholder="Bankroll name e.g. Test BR" />
+  <input id="bkstart" type="number" placeholder="Start € e.g. 1000" />
+  <button id="create">Create bankroll</button>
+</div>
+
+<pre id="log">Log…</pre>
+
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+
+// === UPDATE with your project values ===
+const SUPABASE_URL  = "https://bycktplwlfrdjxghajkg.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
+// ======================================
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, { auth: { persistSession: true }});
+const $ = (s)=>document.querySelector(s);
+const log = (x)=>{ $("#log").textContent = (typeof x==="string"? x : JSON.stringify(x, null, 2)); };
+
+$("#signup").onclick = async ()=>{
+  const { error } = await supabase.auth.signUp({ email: $("#email").value.trim(), password: $("#password").value });
+  log(error ? error : "Signed up (check email to confirm).");
+};
+$("#signin").onclick = async ()=>{
+  const { error } = await supabase.auth.signInWithPassword({ email: $("#email").value.trim(), password: $("#password").value });
+  const { data } = await supabase.auth.getUser();
+  log(error ? error : data);
+};
+$("#signout").onclick = async ()=>{
+  const { error } = await supabase.auth.signOut();
+  log(error ? error : "Signed out.");
+};
+
+// Create bankroll
+$("#create").onclick = async ()=>{
+  const { data: session } = await supabase.auth.getSession();
+  if(!session?.session?.user){ return log("Not signed in."); }
+  const user = session.session.user;
+  const name = $("#bkname").value.trim() || "Test BR";
+  const start = Number($("#bkstart").value || 0);
+
+  const { data, error } = await supabase
+    .from("bankrolls")
+    .insert({ user_id: user.id, name, start_amount: start })
+    .select();
+
+  log(error ? error : data);
+};
+</script>
+</body>
+</html>
