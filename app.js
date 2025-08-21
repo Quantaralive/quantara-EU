@@ -3,7 +3,7 @@
 // Frontend: GitHub Pages (static)
 // Auth/DB: Supabase (anon key)
 // Charts: Chart.js v4
-// Version: v22 (click-safe & robust wiring)
+// Version: v23 (fix: no optional chaining on assignment; robust wiring)
 // ===============================
 
 // ---- Supabase setup
@@ -41,7 +41,7 @@ const State = {
 window.__go = (t) => switchTab(t);
 
 // ---- Boot
-console.log("Quantara boot v22");
+console.log("Quantara boot v23");
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -67,55 +67,63 @@ async function init() {
 // ===============================
 function wireAuthUI() {
   // Sign up (email + password)
-  $("#signup")?.addEventListener("click", async () => {
-    try {
-      const email = $("#email")?.value.trim();
-      const password = $("#password")?.value;
-      if (!email || !password) return alert("Email + password required.");
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return alert(error.message);
-      alert("Check your inbox to confirm your email.");
-    } catch (e) {
-      alert(e.message || String(e));
-    }
-  });
+  const signupBtn = $("#signup");
+  if (signupBtn)
+    signupBtn.addEventListener("click", async () => {
+      try {
+        const email = $("#email")?.value.trim();
+        const password = $("#password")?.value;
+        if (!email || !password) return alert("Email + password required.");
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) return alert(error.message);
+        alert("Check your inbox to confirm your email.");
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    });
 
   // Sign in
-  $("#signin")?.addEventListener("click", async () => {
-    try {
-      const email = $("#email")?.value.trim();
-      const password = $("#password")?.value;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return alert(error.message);
-    } catch (e) {
-      alert(e.message || String(e));
-    }
-  });
+  const signinBtn = $("#signin");
+  if (signinBtn)
+    signinBtn.addEventListener("click", async () => {
+      try {
+        const email = $("#email")?.value.trim();
+        const password = $("#password")?.value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) return alert(error.message);
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    });
 
   // Magic link
-  $("#send-link")?.addEventListener("click", async () => {
-    try {
-      const email = $("#email")?.value.trim();
-      if (!email) return alert("Enter your email.");
-      const { error } = await supabase.auth.signInWithOtp({
-        email,
-        options: { emailRedirectTo: location.href },
-      });
-      if (error) return alert(error.message);
-      alert("Magic link sent.");
-    } catch (e) {
-      alert(e.message || String(e));
-    }
-  });
+  const magicBtn = $("#send-link");
+  if (magicBtn)
+    magicBtn.addEventListener("click", async () => {
+      try {
+        const email = $("#email")?.value.trim();
+        if (!email) return alert("Enter your email.");
+        const { error } = await supabase.auth.signInWithOtp({
+          email,
+          options: { emailRedirectTo: location.href },
+        });
+        if (error) return alert(error.message);
+        alert("Magic link sent.");
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    });
 
   // Legacy Sign out (topbar button, if visible)
-  $("#signout")?.addEventListener("click", async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      alert(e.message || String(e));
-    }
-  });
+  const signoutBtn = $("#signout");
+  if (signoutBtn)
+    signoutBtn.addEventListener("click", async () => {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        alert(e.message || String(e));
+      }
+    });
 
   // Session change
   supabase.auth.onAuthStateChange(async (_evt, session) => {
@@ -175,12 +183,14 @@ function toggleAuthBar(user) {
       authWrap.appendChild(menu);
 
       // Wire dropdown open/close
-      $("#user-menu-btn")?.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        const p = $("#user-menu-panel");
-        if (!p) return;
-        p.style.display = p.style.display === "none" || !p.style.display ? "block" : "none";
-      });
+      const btn = $("#user-menu-btn");
+      if (btn)
+        btn.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const p = $("#user-menu-panel");
+          if (!p) return;
+          p.style.display = p.style.display === "none" || !p.style.display ? "block" : "none";
+        });
       document.addEventListener(
         "click",
         (e) => {
@@ -191,24 +201,24 @@ function toggleAuthBar(user) {
         },
         { capture: true }
       );
-      $("#menu-membership")?.addEventListener("click", () => {
-        alert("Membership page coming soon.");
-      });
-      $("#menu-logout")?.addEventListener("click", async () => {
-        try {
-          await supabase.auth.signOut();
-          // also clear local state
-          State.activeBankrollId = null;
-          localStorage.removeItem("quantara_active_bankroll_id");
-          State.bankrolls = [];
-          State.bets = [];
-          switchTab("home");
-        } catch (e) {
-          alert(e.message || String(e));
-        }
-      });
+      const membership = $("#menu-membership");
+      if (membership) membership.addEventListener("click", () => alert("Membership page coming soon."));
+      const logout = $("#menu-logout");
+      if (logout)
+        logout.addEventListener("click", async () => {
+          try {
+            await supabase.auth.signOut();
+            // also clear local state
+            State.activeBankrollId = null;
+            localStorage.removeItem("quantara_active_bankroll_id");
+            State.bankrolls = [];
+            State.bets = [];
+            switchTab("home");
+          } catch (e) {
+            alert(e.message || String(e));
+          }
+        });
     } else {
-      // Update email if already exists
       const emailSpan = $("#user-email");
       if (emailSpan) emailSpan.textContent = user.email || "You";
     }
@@ -224,7 +234,8 @@ function toggleAuthBar(user) {
 function switchTab(tab) {
   State.activeTab = tab;
   $$(".tabs .tab").forEach((btn) => btn.classList.remove("active"));
-  $(`#tab-btn-${tab}`)?.classList.add("active");
+  const tabBtn = $(`#tab-btn-${tab}`);
+  if (tabBtn) tabBtn.classList.add("active");
 
   ["home", "overview", "analytics", "roi", "calendar", "tools"].forEach((id) => {
     const el = $(`#tab-${id}`);
@@ -283,9 +294,11 @@ async function loadBankrolls() {
 function renderHome() {
   // Current selection
   const curr = State.bankrolls.find((b) => b.id === State.activeBankrollId);
-  $("#current-bk")?.textContent = curr
-    ? `${curr.name} — ${fmtEur(curr.start_amount || 0)}`
-    : "None selected";
+  const currEl = $("#current-bk");
+  if (currEl)
+    currEl.textContent = curr
+      ? `${curr.name} — ${fmtEur(curr.start_amount || 0)}`
+      : "None selected";
 
   // Grid
   const wrap = $("#bankroll-grid");
@@ -374,7 +387,8 @@ function countBetsPerBk() {
 }
 
 window.__openBkModal = () => {
-  $("#bk-modal")?.classList.remove("hidden");
+  const m = $("#bk-modal");
+  if (m) m.classList.remove("hidden");
   const n = $("#bk-name");
   const s = $("#bk-start");
   if (n) n.value = "";
@@ -387,41 +401,46 @@ window.__clearActive = () => {
 };
 
 function wireBankrollModal() {
-  $("#bk-close")?.addEventListener("click", () => $("#bk-modal")?.classList.add("hidden"));
-  $("#bk-cancel")?.addEventListener("click", () => $("#bk-modal")?.classList.add("hidden"));
+  const close = $("#bk-close");
+  if (close) close.addEventListener("click", () => $("#bk-modal")?.classList.add("hidden"));
+  const cancel = $("#bk-cancel");
+  if (cancel) cancel.addEventListener("click", () => $("#bk-modal")?.classList.add("hidden"));
 
-  $("#bk-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    try {
-      if (!State.user) return alert("Sign in first.");
-      const name = $("#bk-name")?.value.trim();
-      const start = Number($("#bk-start")?.value || 0);
-      if (!name) return;
+  const form = $("#bk-form");
+  if (form)
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        if (!State.user) return alert("Sign in first.");
+        const name = $("#bk-name")?.value.trim();
+        const start = Number($("#bk-start")?.value || 0);
+        if (!name) return;
 
-      // Insert and get created row (id) back
-      const { data, error } = await supabase
-        .from("bankrolls")
-        .insert({ user_id: State.user.id, name, start_amount: start })
-        .select()
-        .single();
+        // Insert and get created row (id) back
+        const { data, error } = await supabase
+          .from("bankrolls")
+          .insert({ user_id: State.user.id, name, start_amount: start })
+          .select()
+          .single();
 
-      if (error) return alert(error.message);
+        if (error) return alert(error.message);
 
-      $("#bk-modal")?.classList.add("hidden");
-      await loadBankrolls();
+        const modal = $("#bk-modal");
+        if (modal) modal.classList.add("hidden");
+        await loadBankrolls();
 
-      // Select new bankroll immediately
-      if (data?.id) {
-        State.activeBankrollId = data.id;
-        localStorage.setItem("quantara_active_bankroll_id", data.id);
-        switchTab("overview");
-      } else {
-        renderHome();
+        // Select new bankroll immediately
+        if (data?.id) {
+          State.activeBankrollId = data.id;
+          localStorage.setItem("quantara_active_bankroll_id", data.id);
+          switchTab("overview");
+        } else {
+          renderHome();
+        }
+      } catch (err) {
+        alert(err.message || String(err));
       }
-    } catch (err) {
-      alert(err.message || String(err));
-    }
-  });
+    });
 }
 
 // Helper: get active bankroll record
@@ -451,54 +470,63 @@ async function loadBets() {
 }
 
 function wireLedgerUI() {
-  $("#add-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    try {
-      if (!State.user) return alert("Sign in first.");
-      const bk = currentBk();
-      if (!bk) return alert("Select a bankroll in Home.");
-      const row = {
-        user_id: State.user.id,
-        bankroll_id: bk.id,
-        date: $("#f-date")?.value || new Date().toISOString().slice(0, 10),
-        sport: $("#f-sport")?.value.trim(),
-        league: $("#f-league")?.value.trim() || null,
-        market: $("#f-market")?.value.trim() || null,
-        selection: $("#f-selection")?.value.trim() || null,
-        odds: Number($("#f-odds")?.value || 0),
-        stake: Number($("#f-stake")?.value || 0),
-        result: $("#f-result")?.value || "pending",
-      };
-      const { error } = await supabase.from("bets").insert(row);
-      if (error) return alert(error.message);
-      const sel = $("#f-selection");
-      if (sel) sel.value = "";
-      await loadBets();
-      renderOverview();
-      renderAnalytics();
-      renderROI();
-      renderCalendar();
-    } catch (err) {
-      alert(err.message || String(err));
-    }
-  });
+  const addForm = $("#add-form");
+  if (addForm)
+    addForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        if (!State.user) return alert("Sign in first.");
+        const bk = currentBk();
+        if (!bk) return alert("Select a bankroll in Home.");
+        const row = {
+          user_id: State.user.id,
+          bankroll_id: bk.id,
+          date: $("#f-date")?.value || new Date().toISOString().slice(0, 10),
+          sport: $("#f-sport")?.value.trim(),
+          league: $("#f-league")?.value.trim() || null,
+          market: $("#f-market")?.value.trim() || null,
+          selection: $("#f-selection")?.value.trim() || null,
+          odds: Number($("#f-odds")?.value || 0),
+          stake: Number($("#f-stake")?.value || 0),
+          result: $("#f-result")?.value || "pending",
+        };
+        const { error } = await supabase.from("bets").insert(row);
+        if (error) return alert(error.message);
+        const sel = $("#f-selection");
+        if (sel) sel.value = "";
+        await loadBets();
+        renderOverview();
+        renderAnalytics();
+        renderROI();
+        renderCalendar();
+      } catch (err) {
+        alert(err.message || String(err));
+      }
+    });
 }
 
 function renderOverview() {
   const bk = currentBk();
-  if ($("#bk-name-inline")) $("#bk-name-inline").textContent = bk?.name || "—";
-  if ($("#bk-name-inline-2")) $("#bk-name-inline-2").textContent = bk?.name || "—";
+  const name1 = $("#bk-name-inline");
+  if (name1) name1.textContent = bk?.name || "—";
+  const name2 = $("#bk-name-inline-2");
+  if (name2) name2.textContent = bk?.name || "—";
 
   if (!bk) {
-    if ($("#bankroll")) $("#bankroll").textContent = "€0";
-    if ($("#staked")) $("#staked").textContent = "€0";
-    if ($("#winrate")) $("#winrate").textContent = "0%";
-    if ($("#bankroll-start")) $("#bankroll-start").value = "";
+    const el1 = $("#bankroll");
+    if (el1) el1.textContent = "€0";
+    const el2 = $("#staked");
+    if (el2) el2.textContent = "€0";
+    const el3 = $("#winrate");
+    if (el3) el3.textContent = "0%";
+    const st = $("#bankroll-start");
+    if (st) st.value = "";
     renderBankrollChart([]);
     renderLedger([]);
     return;
   }
-  if ($("#bankroll-start")) $("#bankroll-start").value = bk.start_amount || 0;
+  const st0 = $("#bankroll-start");
+  if (st0) st0.value = bk.start_amount || 0;
 
   const bets = State.bets.filter((b) => b.bankroll_id === bk.id);
   const settled = bets.filter(
@@ -509,9 +537,12 @@ function renderOverview() {
   const wins = settled.filter((b) => b.result === "win").length;
   const wr = settled.length ? (wins / settled.length) * 100 : 0;
 
-  if ($("#bankroll")) $("#bankroll").textContent = fmtEur((bk.start_amount || 0) + pnl);
-  if ($("#staked")) $("#staked").textContent = fmtEur(staked);
-  if ($("#winrate")) $("#winrate").textContent = fmtPct(wr);
+  const elB = $("#bankroll");
+  if (elB) elB.textContent = fmtEur((bk.start_amount || 0) + pnl);
+  const elS = $("#staked");
+  if (elS) elS.textContent = fmtEur(staked);
+  const elW = $("#winrate");
+  if (elW) elW.textContent = fmtPct(wr);
 
   // chart points
   const points = [];
@@ -532,22 +563,24 @@ function renderOverview() {
   renderLedger(bets);
 }
 
-$("#save-bankroll")?.addEventListener("click", async () => {
-  try {
-    const bk = currentBk();
-    if (!bk) return alert("Pick a bankroll in Home.");
-    const val = Number($("#bankroll-start")?.value || 0);
-    const { error } = await supabase
-      .from("bankrolls")
-      .update({ start_amount: val })
-      .eq("id", bk.id);
-    if (error) return alert(error.message);
-    await loadBankrolls();
-    renderOverview();
-  } catch (e) {
-    alert(e.message || String(e));
-  }
-});
+const saveBtn = $("#save-bankroll");
+if (saveBtn)
+  saveBtn.addEventListener("click", async () => {
+    try {
+      const bk = currentBk();
+      if (!bk) return alert("Pick a bankroll in Home.");
+      const val = Number($("#bankroll-start")?.value || 0);
+      const { error } = await supabase
+        .from("bankrolls")
+        .update({ start_amount: val })
+        .eq("id", bk.id);
+      if (error) return alert(error.message);
+      await loadBankrolls();
+      renderOverview();
+    } catch (e) {
+      alert(e.message || String(e));
+    }
+  });
 
 function renderBankrollChart(points) {
   const ctx = $("#bankrollChart");
@@ -681,38 +714,39 @@ function renderLedger(bets) {
 // Edit modal
 // ===============================
 function wireEditModal() {
-  $("#edit-close")?.addEventListener("click", () =>
-    $("#edit-modal")?.classList.add("hidden")
-  );
-  $("#edit-cancel")?.addEventListener("click", () =>
-    $("#edit-modal")?.classList.add("hidden")
-  );
-  $("#edit-form")?.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    try {
-      const id = $("#e-id")?.value;
-      const row = {
-        date: $("#e-date")?.value,
-        sport: $("#e-sport")?.value.trim(),
-        league: $("#e-league")?.value.trim() || null,
-        market: $("#e-market")?.value.trim() || null,
-        selection: $("#e-selection")?.value.trim() || null,
-        odds: Number($("#e-odds")?.value || 0),
-        stake: Number($("#e-stake")?.value || 0),
-        result: $("#e-result")?.value,
-      };
-      const { error } = await supabase.from("bets").update(row).eq("id", id);
-      if (error) return alert(error.message);
-      $("#edit-modal")?.classList.add("hidden");
-      await loadBets();
-      renderOverview();
-      renderAnalytics();
-      renderROI();
-      renderCalendar();
-    } catch (err) {
-      alert(err.message || String(err));
-    }
-  });
+  const close = $("#edit-close");
+  if (close) close.addEventListener("click", () => $("#edit-modal")?.classList.add("hidden"));
+  const cancel = $("#edit-cancel");
+  if (cancel) cancel.addEventListener("click", () => $("#edit-modal")?.classList.add("hidden"));
+  const form = $("#edit-form");
+  if (form)
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      try {
+        const id = $("#e-id")?.value;
+        const row = {
+          date: $("#e-date")?.value,
+          sport: $("#e-sport")?.value.trim(),
+          league: $("#e-league")?.value.trim() || null,
+          market: $("#e-market")?.value.trim() || null,
+          selection: $("#e-selection")?.value.trim() || null,
+          odds: Number($("#e-odds")?.value || 0),
+          stake: Number($("#e-stake")?.value || 0),
+          result: $("#e-result")?.value,
+        };
+        const { error } = await supabase.from("bets").update(row).eq("id", id);
+        if (error) return alert(error.message);
+        const modal = $("#edit-modal");
+        if (modal) modal.classList.add("hidden");
+        await loadBets();
+        renderOverview();
+        renderAnalytics();
+        renderROI();
+        renderCalendar();
+      } catch (err) {
+        alert(err.message || String(err));
+      }
+    });
 }
 
 function openEditModal(id) {
@@ -727,7 +761,8 @@ function openEditModal(id) {
   $("#e-odds").value = b.odds || 1.01;
   $("#e-stake").value = b.stake || 0;
   $("#e-result").value = b.result || "pending";
-  $("#edit-modal")?.classList.remove("hidden");
+  const modal = $("#edit-modal");
+  if (modal) modal.classList.remove("hidden");
 }
 
 // ===============================
@@ -763,13 +798,20 @@ function renderAnalytics() {
   })();
   const maxDD = computeMaxDrawdown(bk, settled);
 
-  $("#an-net-profit")?.textContent = fmtEur(net);
-  $("#an-staked")?.textContent = fmtEur(staked);
-  $("#avg-stake")?.textContent = fmtEur(avgStake);
-  $("#avg-odds")?.textContent = (avgOdds || 0).toFixed(2);
-  $("#an-winrate")?.textContent = fmtPct(wr);
-  $("#an-pf")?.textContent = (pf || 0).toFixed(2);
-  $("#max-dd")?.textContent = fmtEur(maxDD);
+  const elNP = $("#an-net-profit");
+  if (elNP) elNP.textContent = fmtEur(net);
+  const elANST = $("#an-staked");
+  if (elANST) elANST.textContent = fmtEur(staked);
+  const elAvgSt = $("#avg-stake");
+  if (elAvgSt) elAvgSt.textContent = fmtEur(avgStake);
+  const elAvgO = $("#avg-odds");
+  if (elAvgO) elAvgO.textContent = (avgOdds || 0).toFixed(2);
+  const elWR = $("#an-winrate");
+  if (elWR) elWR.textContent = fmtPct(wr);
+  const elPF = $("#an-pf");
+  if (elPF) elPF.textContent = (pf || 0).toFixed(2);
+  const elDD = $("#max-dd");
+  if (elDD) elDD.textContent = fmtEur(maxDD);
 
   const be = avgOdds ? 100 / avgOdds : 0;
   const edge = wr - be;
@@ -780,7 +822,8 @@ function renderAnalytics() {
     const k = b > 0 ? (b * p - q) / b : 0;
     return Math.max(0, k * 100);
   })();
-  $("#edge")?.textContent = `${edge.toFixed(2)}% / ${kelly.toFixed(2)}%`;
+  const elEdge = $("#edge");
+  if (elEdge) elEdge.textContent = `${edge.toFixed(2)}% / ${kelly.toFixed(2)}%`;
 
   renderBar("#pnlBySportChart", "pnlBySport", pnlBySport(bets));
   renderBar("#winRateBySportChart", "wrBySport", winRateBySport(bets), true);
@@ -800,17 +843,16 @@ function fillAnalyticsEmpty() {
     "#an-pf",
     "#max-dd",
     "#edge",
-  ].forEach((id) =>
-    $(id) && ($(id).textContent = id === "#avg-odds" ? "0.00" : id === "#an-winrate" ? "0%" : "€0")
-  );
-  ["pnlBySport", "wrBySport", "pnlMonth", "weekday", "oddsHist", "resultsPie"].forEach(
-    (k) => {
-      if (State.charts[k]) {
-        State.charts[k].destroy();
-        delete State.charts[k];
-      }
+  ].forEach((id) => {
+    const el = $(id);
+    if (el) el.textContent = id === "#avg-odds" ? "0.00" : id === "#an-winrate" ? "0%" : "€0";
+  });
+  ["pnlBySport", "wrBySport", "pnlMonth", "weekday", "oddsHist", "resultsPie"].forEach((k) => {
+    if (State.charts[k]) {
+      State.charts[k].destroy();
+      delete State.charts[k];
     }
-  );
+  });
 }
 
 function pnlBySport(bets) {
@@ -938,9 +980,10 @@ function computeMaxDrawdown(bk, settled) {
 function renderROI() {
   const bk = currentBk();
   if (!bk) {
-    ["#roi-overall", "#roi-settled", "#roi-profit", "#roi-stake"].forEach(
-      (id) => $(id) && ($(id).textContent = "0")
-    );
+    ["#roi-overall", "#roi-settled", "#roi-profit", "#roi-stake"].forEach((id) => {
+      const el = $(id);
+      if (el) el.textContent = "0";
+    });
     const body = $("#roi-tbody");
     if (body) body.innerHTML = "";
     return;
@@ -952,10 +995,14 @@ function renderROI() {
   const stake = settled.reduce((s, b) => s + (Number(b.stake) || 0), 0);
   const profit = settled.reduce((s, b) => s + profitOf(b), 0);
   const roi = stake > 0 ? (profit / stake) * 100 : 0;
-  $("#roi-overall")?.textContent = fmtPct(roi);
-  $("#roi-settled")?.textContent = settled.length;
-  $("#roi-profit")?.textContent = fmtEur(profit);
-  $("#roi-stake")?.textContent = fmtEur(stake);
+  const elRoi = $("#roi-overall");
+  if (elRoi) elRoi.textContent = fmtPct(roi);
+  const elSet = $("#roi-settled");
+  if (elSet) elSet.textContent = settled.length;
+  const elProf = $("#roi-profit");
+  if (elProf) elProf.textContent = fmtEur(profit);
+  const elStk = $("#roi-stake");
+  if (elStk) elStk.textContent = fmtEur(stake);
 
   const bySport = {};
   for (const b of settled) {
@@ -986,48 +1033,58 @@ function renderROI() {
 // Calendar
 // ===============================
 function wireCalendarUI() {
-  $("#cal-prev")?.addEventListener("click", () => {
-    const c = State.calendar;
-    c.month--;
-    if (c.month < 0) {
-      c.month = 11;
-      c.year--;
-    }
-    renderCalendar();
-  });
-  $("#cal-next")?.addEventListener("click", () => {
-    const c = State.calendar;
-    c.month++;
-    if (c.month > 11) {
-      c.month = 0;
-      c.year++;
-    }
-    renderCalendar();
-  });
-  $("#clear-filter")?.addEventListener("click", () => {
-    $("#day-tbody") && ($("#day-tbody").innerHTML = "");
-    $("#day-selected") && ($("#day-selected").textContent = "—");
-    $("#day-pnl") && ($("#day-pnl").textContent = "€0");
-    renderCalendar();
-  });
+  const prev = $("#cal-prev");
+  if (prev)
+    prev.addEventListener("click", () => {
+      const c = State.calendar;
+      c.month--;
+      if (c.month < 0) {
+        c.month = 11;
+        c.year--;
+      }
+      renderCalendar();
+    });
+  const next = $("#cal-next");
+  if (next)
+    next.addEventListener("click", () => {
+      const c = State.calendar;
+      c.month++;
+      if (c.month > 11) {
+        c.month = 0;
+        c.year++;
+      }
+      renderCalendar();
+    });
+  const clear = $("#clear-filter");
+  if (clear)
+    clear.addEventListener("click", () => {
+      const tb = $("#day-tbody");
+      if (tb) tb.innerHTML = "";
+      const sel = $("#day-selected");
+      if (sel) sel.textContent = "—";
+      const pnl = $("#day-pnl");
+      if (pnl) pnl.textContent = "€0";
+      renderCalendar();
+    });
 }
 
 function renderCalendar() {
   const bk = currentBk();
-  if ($("#calendar-grid")) $("#calendar-grid").innerHTML = "";
-  if ($("#cal-title"))
-    $("#cal-title").textContent = new Date(
-      State.calendar.year,
-      State.calendar.month,
-      1
-    ).toLocaleDateString(undefined, { year: "numeric", month: "long" });
+  const grid = $("#calendar-grid");
+  if (grid) grid.innerHTML = "";
+  const title = $("#cal-title");
+  if (title)
+    title.textContent = new Date(State.calendar.year, State.calendar.month, 1).toLocaleDateString(
+      undefined,
+      { year: "numeric", month: "long" }
+    );
   if (!bk) return;
 
   const bets = State.bets.filter((b) => b.bankroll_id === bk.id);
   const first = new Date(State.calendar.year, State.calendar.month, 1);
   const startDay = first.getDay(); // 0..6
   const daysInMonth = new Date(State.calendar.year, State.calendar.month + 1, 0).getDate();
-  const grid = $("#calendar-grid");
+
   if (!grid) return;
 
   const dayPnL = {};
@@ -1061,13 +1118,11 @@ function renderCalendar() {
     cell.addEventListener("click", () => {
       $$(".calendar-grid .cell").forEach((c) => c.classList.remove("active"));
       cell.classList.add("active");
-      if ($("#day-selected"))
-        $("#day-selected").textContent = new Date(
-          State.calendar.year,
-          State.calendar.month,
-          d
-        ).toDateString();
-      if ($("#day-pnl")) $("#day-pnl").textContent = fmtEur(amt);
+      const daySel = $("#day-selected");
+      if (daySel)
+        daySel.textContent = new Date(State.calendar.year, State.calendar.month, d).toDateString();
+      const dayPnl = $("#day-pnl");
+      if (dayPnl) dayPnl.textContent = fmtEur(amt);
       renderDayTable(byDayRows[d] || []);
     });
     grid.appendChild(cell);
@@ -1097,9 +1152,12 @@ function renderDayTable(rows) {
 // Tools (Risk / Poisson / Masaniello)
 // ===============================
 function wireToolsUI() {
-  $("#tool-btn-risk")?.addEventListener("click", () => showTool("risk"));
-  $("#tool-btn-poisson")?.addEventListener("click", () => showTool("poisson"));
-  $("#tool-btn-masa")?.addEventListener("click", () => showTool("masa"));
+  const riskBtn = $("#tool-btn-risk");
+  if (riskBtn) riskBtn.addEventListener("click", () => showTool("risk"));
+  const poiBtn = $("#tool-btn-poisson");
+  if (poiBtn) poiBtn.addEventListener("click", () => showTool("poisson"));
+  const masaBtn = $("#tool-btn-masa");
+  if (masaBtn) masaBtn.addEventListener("click", () => showTool("masa"));
 
   // Sync number + range
   const link = (numSel, rangeSel) => {
@@ -1113,20 +1171,30 @@ function wireToolsUI() {
   link("#rk-cap", "#rk-cap-range");
   link("#ms-p", "#ms-p-range");
 
-  $("#rk-run")?.addEventListener("click", runRisk);
-  $("#ps-run")?.addEventListener("click", runPoisson);
+  const rkRun = $("#rk-run");
+  if (rkRun) rkRun.addEventListener("click", runRisk);
+  const psRun = $("#ps-run");
+  if (psRun) psRun.addEventListener("click", runPoisson);
 
-  $("#ms-run")?.addEventListener("click", runMasaniello);
-  $("#ms-save")?.addEventListener("click", saveMasaniello);
-  $("#ms-delete")?.addEventListener("click", deleteMasaniello);
+  const msRun = $("#ms-run");
+  if (msRun) msRun.addEventListener("click", runMasaniello);
+  const msSave = $("#ms-save");
+  if (msSave) msSave.addEventListener("click", saveMasaniello);
+  const msDel = $("#ms-delete");
+  if (msDel) msDel.addEventListener("click", deleteMasaniello);
   loadMasanielloList();
 }
 
 function showTool(which) {
   $$(".tools-nav .chip").forEach((c) => c.classList.remove("active"));
-  $(`#tool-btn-${which}`)?.classList.add("active");
-  ["risk", "poisson", "masa"].forEach((k) => $(`#tools-${k}`)?.classList.add("hidden"));
-  $(`#tools-${which}`)?.classList.remove("hidden");
+  const btn = $(`#tool-btn-${which}`);
+  if (btn) btn.classList.add("active");
+  ["risk", "poisson", "masa"].forEach((k) => {
+    const p = $(`#tools-${k}`);
+    if (p) p.classList.add("hidden");
+  });
+  const panel = $(`#tools-${which}`);
+  if (panel) panel.classList.remove("hidden");
 }
 function renderToolsLanding() {}
 
@@ -1147,10 +1215,14 @@ function runRisk() {
   const kelly = b > 0 ? Math.max(0, (b * p - q) / b) : 0;
   const kellyPct = kelly * 100;
 
-  $("#rk-be") && ($("#rk-be").textContent = `${be.toFixed(2)}%`);
-  $("#rk-edge") && ($("#rk-edge").textContent = `${edge.toFixed(2)}%`);
-  $("#rk-ev") && ($("#rk-ev").textContent = fmtEur(evPer1));
-  $("#rk-kelly") && ($("#rk-kelly").textContent = `${kellyPct.toFixed(2)}%`);
+  const beEl = $("#rk-be");
+  if (beEl) beEl.textContent = `${be.toFixed(2)}%`;
+  const edgeEl = $("#rk-edge");
+  if (edgeEl) edgeEl.textContent = `${edge.toFixed(2)}%`;
+  const evEl = $("#rk-ev");
+  if (evEl) evEl.textContent = fmtEur(evPer1);
+  const kEl = $("#rk-kelly");
+  if (kEl) kEl.textContent = `${kellyPct.toFixed(2)}%`;
 
   const flat = BR * 0.01;
   const halfK = BR * (kelly / 2);
@@ -1213,11 +1285,16 @@ function runPoisson() {
     if (tg > ouLine) over += totalGoals[tg];
   }
 
-  $("#ps-ph") && ($("#ps-ph").textContent = fmtPct(ph * 100));
-  $("#ps-pd") && ($("#ps-pd").textContent = fmtPct(pd * 100));
-  $("#ps-pa") && ($("#ps-pa").textContent = fmtPct(pa * 100));
-  $("#ps-over") && ($("#ps-over").textContent = fmtPct(over * 100));
-  $("#ps-btts") && ($("#ps-btts").textContent = fmtPct(btts * 100));
+  const phEl = $("#ps-ph");
+  if (phEl) phEl.textContent = fmtPct(ph * 100);
+  const pdEl = $("#ps-pd");
+  if (pdEl) pdEl.textContent = fmtPct(pd * 100);
+  const paEl = $("#ps-pa");
+  if (paEl) paEl.textContent = fmtPct(pa * 100);
+  const overEl = $("#ps-over");
+  if (overEl) overEl.textContent = fmtPct(over * 100);
+  const bttsEl = $("#ps-btts");
+  if (bttsEl) bttsEl.textContent = fmtPct(btts * 100);
 
   renderBarSimple("ps1x2Chart", "Prob.", ["Home", "Draw", "Away"], [ph, pd, pa].map((x) => x * 100));
   const tgLabels = totalGoals.map((_, i) => i);
@@ -1276,11 +1353,16 @@ function runMasaniello() {
     rows.push({ i, stake, result: "", cap });
   }
 
-  $("#ms-q") && ($("#ms-q").textContent = `${Math.round(p * n)} (est.)`);
-  $("#ms-rem") && ($("#ms-rem").textContent = `${n - winsDone}`);
-  $("#ms-stake") && ($("#ms-stake").textContent = fmtEur(rows[0]?.stake || 0));
-  $("#ms-nextwin") && ($("#ms-nextwin").textContent = fmtEur(cap0 + (rows[0]?.stake || 0) * b));
-  $("#ms-nextloss") && ($("#ms-nextloss").textContent = fmtEur(cap0 - (rows[0]?.stake || 0)));
+  const qEl = $("#ms-q");
+  if (qEl) qEl.textContent = `${Math.round(p * n)} (est.)`;
+  const remEl = $("#ms-rem");
+  if (remEl) remEl.textContent = `${n - winsDone}`;
+  const stakeEl = $("#ms-stake");
+  if (stakeEl) stakeEl.textContent = fmtEur(rows[0]?.stake || 0);
+  const nextWinEl = $("#ms-nextwin");
+  if (nextWinEl) nextWinEl.textContent = fmtEur(cap0 + (rows[0]?.stake || 0) * b);
+  const nextLossEl = $("#ms-nextloss");
+  if (nextLossEl) nextLossEl.textContent = fmtEur(cap0 - (rows[0]?.stake || 0));
 
   const tb = $("#ms-rows");
   if (!tb) return;
