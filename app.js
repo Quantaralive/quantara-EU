@@ -3,17 +3,32 @@
 // Frontend: GitHub Pages (static)
 // Auth/DB: Supabase (anon key)
 // Charts: Chart.js v4
-// Version: v26
+// Version: v27
 // ===============================
 
 // ───────────────────────────────
-// Supabase setup
+// Supabase setup (robust import with CDN fallback)
 // ───────────────────────────────
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+// Top-level await is supported in module scripts in modern browsers
+let createClient;
+try {
+  // Prefer jsDelivr ESM (very reliable)
+  ({ createClient } = await import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm"));
+} catch (e1) {
+  console.warn("[Quantara] jsDelivr import failed, trying esm.sh fallback…", e1);
+  try {
+    ({ createClient } = await import("https://esm.sh/@supabase/supabase-js@2.45.4"));
+  } catch (e2) {
+    console.error("[Quantara] Could not load Supabase SDK from either CDN.", e2);
+    alert("Cannot load Supabase SDK (network/CDN blocked). Please try a different network or VPN.");
+    throw e2;
+  }
+}
+
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true },
 });
@@ -55,7 +70,8 @@ window.__go = (t) => switchTab(t);
 // ───────────────────────────────
 // Boot
 // ───────────────────────────────
-console.log("Quantara boot v26");
+console.log("Quantara boot v27");
+window._QUANTARA_HEALTH = "js-loaded"; // quick check: type this in console to verify script ran
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
@@ -86,7 +102,6 @@ async function init() {
 // ───────────────────────────────
 async function detectDbCapabilities() {
   try {
-    // Try selecting sharing columns; if they don't exist, PostgREST returns 400/42703 internally to client as error
     const { error } = await supabase
       .from("bankrolls")
       .select("id, public_slug, published")
@@ -136,7 +151,12 @@ function wireAuthUI() {
 
   // Sign out button (legacy — still in DOM; real menu also wires sign out)
   $("#signout")?.addEventListener("click", async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("signOut error", e);
+      alert("Sign out failed. See console for details.");
+    }
   });
 
   // Session change
@@ -212,7 +232,7 @@ function toggleAuthBar(user) {
         alert("Membership page coming soon.");
       });
       $("#menu-logout").addEventListener("click", async () => {
-        await supabase.auth.signOut();
+        try { await supabase.auth.signOut(); } catch (e) { console.error(e); }
       });
     } else {
       // Update email if already exists
@@ -273,7 +293,6 @@ async function loadEverything() {
 // Public view (read-only via ?view=<slug>)
 // ───────────────────────────────
 async function loadPublicView(slug) {
-  // Try fetch bankroll by slug (must have public policies on)
   const { data: bks, error: e1 } = await supabase
     .from("bankrolls")
     .select("*")
@@ -296,7 +315,6 @@ async function loadPublicView(slug) {
   State.bankrolls = [bk];
   State.activeBankrollId = bk.id;
 
-  // Load bets belonging to this bankroll (public policy required)
   const { data: bets, error: e2 } = await supabase
     .from("bets")
     .select("*")
@@ -310,35 +328,27 @@ async function loadPublicView(slug) {
   }
   State.bets = bets || [];
 
-  // Render read-only
   renderOverview();
   renderAnalytics();
   renderROI();
   renderCalendar();
 
-  // Lock UI to read-only
   disableOwnerOnlyUI();
 }
 function renderPublicError(msg) {
-  // minimal message into the home grid
   const grid = $("#bankroll-grid");
   if (grid) grid.innerHTML = `<div class="muted">${msg}</div>`;
-  // also hide forms/buttons across tabs
   disableOwnerOnlyUI(true);
 }
 function disableOwnerOnlyUI(hideHome = false) {
-  // hide auth / creation / edit buttons in public view
   $(".auth")?.classList.add("hidden");
   $("#btn-new-bankroll")?.setAttribute("disabled", "true");
   $("#btn-clear-active")?.setAttribute("disabled", "true");
   $("#add-form")?.querySelectorAll("input,select,button").forEach((el) =>
     el.setAttribute("disabled", "true")
   );
-  // Edit buttons in ledger
   $$("#ledger .action-btn").forEach((el) => el.setAttribute("disabled", "true"));
-  // Save bankroll start
   $("#save-bankroll")?.setAttribute("disabled", "true");
-  // Tools are still fine (local)
   if (hideHome) $("#tab-home")?.classList.add("hidden");
 }
 
@@ -364,13 +374,11 @@ async function loadBankrolls() {
 }
 
 function renderHome() {
-  // Current selection
   const curr = State.bankrolls.find((b) => b.id === State.activeBankrollId);
   $("#current-bk").textContent = curr
     ? `${curr.name} — ${fmtEur(curr.start_amount || 0)}`
     : "None selected";
 
-  // Grid
   const wrap = $("#bankroll-grid");
   wrap.innerHTML = "";
   if (!State.user) {
@@ -406,14 +414,12 @@ function renderHome() {
     wrap.appendChild(div);
   }
 
-  // counts
   const counts = countBetsPerBk();
   Object.entries(counts).forEach(([bkId, count]) => {
     const el = document.querySelector(`[data-bk-count="${bkId}"]`);
     if (el) el.textContent = count;
   });
 
-  // actions
   wrap.querySelectorAll("button[data-open]").forEach((btn) => {
     btn.addEventListener("click", () => {
       State.activeBankrollId = btn.getAttribute("data-open");
@@ -424,6 +430,7 @@ function renderHome() {
       switchTab("overview");
     });
   });
+
   wrap.querySelectorAll("button[data-rename]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-rename");
@@ -440,7 +447,6 @@ function renderHome() {
     });
   });
 
-  // Share button
   wrap.querySelectorAll("button[data-share]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-share");
@@ -487,7 +493,6 @@ async function handleShareClick(bkId) {
       );
       return;
     }
-    // refresh in-memory
     bk.public_slug = slug;
     bk.published = true;
   } else if (!bk.published) {
@@ -533,7 +538,6 @@ function wireBankrollModal() {
     const start = Number($("#bk-start").value || 0);
     if (!name) return;
 
-    // Insert and return row
     const { data, error } = await supabase
       .from("bankrolls")
       .insert({ user_id: State.user.id, name, start_amount: start })
@@ -545,7 +549,6 @@ function wireBankrollModal() {
     await loadBankrolls();
     renderHome();
 
-    // Optionally show where to find the share link
     if (State.db.hasSharingColumns) {
       alert(
         "Bankroll created.\n\nYou can share it later from the Home list (Share button) or from Overview > Settings (Share box)."
@@ -614,7 +617,6 @@ function renderOverview() {
   $("#bk-name-inline").textContent = bk?.name || "—";
   $("#bk-name-inline-2").textContent = bk?.name || "—";
 
-  // Inject a "Share box" into the Settings card (rightmost in Overview)
   ensureShareBox(bk);
 
   if (!bk) {
@@ -641,7 +643,6 @@ function renderOverview() {
   $("#staked").textContent = fmtEur(staked);
   $("#winrate").textContent = fmtPct(wr);
 
-  // chart points
   const points = [];
   let bal = Number(bk.start_amount || 0);
   const byDate = {};
@@ -655,7 +656,6 @@ function renderOverview() {
   }
   renderBankrollChart(points);
 
-  // ledger + month tabs
   renderMonthTabs(bets);
   renderLedger(bets);
 }
@@ -702,7 +702,6 @@ function renderBankrollChart(points) {
   });
 }
 
-// Profit per bet
 function profitOf(b) {
   const odds = Number(b.odds) || 0,
     stake = Number(b.stake) || 0;
@@ -711,7 +710,6 @@ function profitOf(b) {
   return 0; // void or pending
 }
 
-// Month tabs + filter
 let LedgerFilter = { monthKey: "ALL" }; // YYYY-MM
 function renderMonthTabs(bets) {
   const wrap = $("#month-tabs");
@@ -795,7 +793,6 @@ function renderLedger(bets) {
     `;
     tbody.appendChild(tr);
   }
-  // wire actions
   if (!PublicViewSlug) {
     tbody.querySelectorAll("[data-edit]").forEach((btn) => {
       btn.addEventListener("click", () =>
@@ -968,9 +965,10 @@ function pnlBySport(bets) {
     const k = b.sport || "—";
     map[k] = (map[k] || 0) + profitOf(b);
   }
-  const labels = Object.keys(map);
-  const values = labels.map((l) => map[l]);
-  return { labels, values };
+  return {
+    labels: Object.keys(map),
+    values: Object.keys(map).map((l) => map[l]),
+  };
 }
 function winRateBySport(bets) {
   const map = {};
@@ -1013,7 +1011,7 @@ function oddsHistogram(bets) {
   for (const b of bets) {
     const o = Number(b.odds || 0);
     if (!o) continue;
-    const k = (Math.floor(o * 10) / 10).toFixed(1); // 1.5, 1.6, ...
+    const k = (Math.floor(o * 10) / 10).toFixed(1);
     buckets[k] = (buckets[k] || 0) + 1;
   }
   const labels = Object.keys(buckets).sort(
@@ -1024,9 +1022,7 @@ function oddsHistogram(bets) {
 }
 function resultsBreakdown(bets) {
   const c = { win: 0, loss: 0, void: 0, pending: 0 };
-  for (const b of bets) {
-    c[b.result || "pending"]++;
-  }
+  for (const b of bets) c[b.result || "pending"]++;
   const labels = Object.keys(c);
   const values = labels.map((l) => c[l]);
   return { labels, values };
@@ -1204,13 +1200,11 @@ function renderCalendar() {
     }
   }
 
-  // fillers before first
   for (let i = 0; i < startDay; i++) {
     const cell = document.createElement("div");
     cell.className = "cell out";
     grid.appendChild(cell);
   }
-  // month days
   for (let d = 1; d <= daysInMonth; d++) {
     const cell = document.createElement("div");
     cell.className = "cell";
@@ -1260,7 +1254,6 @@ function wireToolsUI() {
   $("#tool-btn-poisson")?.addEventListener("click", () => showTool("poisson"));
   $("#tool-btn-masa")?.addEventListener("click", () => showTool("masa"));
 
-  // Sync number + range
   const link = (numSel, rangeSel) => {
     const num = $(numSel),
       rng = $(rangeSel);
@@ -1290,7 +1283,6 @@ function showTool(which) {
 }
 function renderToolsLanding() {}
 
-// ---- Risk
 function runRisk() {
   const BR = Number($("#rk-bankroll").value || 0);
   const odds = Number($("#rk-odds").value || 0);
@@ -1342,7 +1334,6 @@ function renderBarSimple(canvasId, label, labels, values) {
   });
 }
 
-// ---- Poisson
 function runPoisson() {
   const lamH = Number($("#ps-home").value || 0);
   const lamA = Number($("#ps-away").value || 0);
@@ -1433,7 +1424,6 @@ const factorial = (n) => {
   return r;
 };
 
-// ---- Masaniello (simple helper, saved in localStorage)
 function runMasaniello() {
   const name = $("#ms-name").value.trim() || "My System";
   const cap0 = Number($("#ms-capital").value || 0);
@@ -1555,12 +1545,9 @@ function computeProfitForBankroll(bkId) {
   );
   return rows.reduce((s, b) => s + profitOf(b), 0);
 }
-
-// (No-op but present for completeness; Overview wiring expects it)
 function wireOverviewUI() {}
 
 function makeSlug() {
-  // 10-char URL-safe slug
   const alphabet =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let s = "";
@@ -1579,12 +1566,10 @@ async function copyToClipboard(text) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    // fallback prompt
     window.prompt("Copy this link:", text);
   }
 }
 
-// Add a "Share box" under Overview > Settings
 function ensureShareBox(bk) {
   const settingsCard = $(
     '#tab-overview .card.settings'
@@ -1614,7 +1599,6 @@ function ensureShareBox(bk) {
         );
         return;
       }
-      // Ensure slug + published
       if (!bk.public_slug || !bk.published) {
         const updates = {
           public_slug: bk.public_slug || makeSlug(),
@@ -1640,7 +1624,6 @@ function ensureShareBox(bk) {
     });
   }
 
-  // If we already have a published slug, populate the box
   const linkInput = $("#share-link");
   if (bk?.public_slug && bk?.published) {
     linkInput.value = buildPublicLink(bk.public_slug);
@@ -1648,6 +1631,5 @@ function ensureShareBox(bk) {
     linkInput.value = "";
   }
 
-  // In public view, hide the share UI
   if (PublicViewSlug) box.style.display = "none";
 }
