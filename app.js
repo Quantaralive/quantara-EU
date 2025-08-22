@@ -3,10 +3,12 @@
 // Frontend: GitHub Pages (static)
 // Auth/DB: Supabase (anon key)
 // Charts: Chart.js v4
-// Version: v23 (fix: no optional chaining on assignment; robust wiring)
+// Version: v26
 // ===============================
 
-// ---- Supabase setup
+// ───────────────────────────────
+// Supabase setup
+// ───────────────────────────────
 const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
@@ -16,7 +18,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: { persistSession: true },
 });
 
-// ---- DOM helpers
+// ───────────────────────────────
+// DOM helpers
+// ───────────────────────────────
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 const fmtEur = (n) =>
@@ -26,104 +30,114 @@ const fmtEur = (n) =>
   })}`;
 const fmtPct = (n) => `${(Number(n) || 0).toFixed(1)}%`;
 
-// ---- App state
+// ───────────────────────────────
+// App state
+// ───────────────────────────────
+const urlParams = new URLSearchParams(location.search);
+const PublicViewSlug = urlParams.get("view") || null; // when present, show read-only public view
+
 const State = {
   user: null,
   activeTab: "home",
-  activeBankrollId: localStorage.getItem("quantara_active_bankroll_id") || null,
+  activeBankrollId:
+    localStorage.getItem("quantara_active_bankroll_id") || null,
   charts: {}, // Chart.js instances
   bets: [],
   bankrolls: [],
   calendar: { year: new Date().getFullYear(), month: new Date().getMonth() }, // 0..11
+  // capability flags (detect DB schema)
+  db: { hasSharingColumns: null },
 };
 
 // Simple router hook for inline onclick in HTML
 window.__go = (t) => switchTab(t);
 
-// ---- Boot
-console.log("Quantara boot v23");
+// ───────────────────────────────
+// Boot
+// ───────────────────────────────
+console.log("Quantara boot v26");
 document.addEventListener("DOMContentLoaded", init);
 
 async function init() {
-  try {
-    wireAuthUI();
-    wireOverviewUI();
-    wireLedgerUI();
-    wireEditModal();
-    wireBankrollModal();
-    wireCalendarUI();
-    wireToolsUI();
+  wireAuthUI();
+  wireOverviewUI();
+  wireLedgerUI();
+  wireEditModal();
+  wireBankrollModal();
+  wireCalendarUI();
+  wireToolsUI();
 
-    await refreshAuth(); // sets State.user and toggles auth UI
-    switchTab(State.activeTab || "home");
-    await loadEverything();
-  } catch (e) {
-    console.error("Init error:", e);
+  await detectDbCapabilities();
+
+  // If we arrived on a public link, skip auth requirement for viewing
+  if (PublicViewSlug) {
+    $(".auth")?.classList.add("hidden"); // hide auth bar in public mode
+    await loadPublicView(PublicViewSlug);
+    switchTab("overview"); // jump straight to overview of the shared bankroll
+    return;
+  }
+
+  await refreshAuth(); // sets State.user and toggles auth UI
+  switchTab(State.activeTab || "home");
+}
+
+// ───────────────────────────────
+// DB capability detection (share columns?)
+// ───────────────────────────────
+async function detectDbCapabilities() {
+  try {
+    // Try selecting sharing columns; if they don't exist, PostgREST returns 400/42703 internally to client as error
+    const { error } = await supabase
+      .from("bankrolls")
+      .select("id, public_slug, published")
+      .limit(1);
+    State.db.hasSharingColumns = !error;
+  } catch {
+    State.db.hasSharingColumns = false;
   }
 }
 
-// ===============================
+// ───────────────────────────────
 // Auth
-// ===============================
+// ───────────────────────────────
 function wireAuthUI() {
   // Sign up (email + password)
-  const signupBtn = $("#signup");
-  if (signupBtn)
-    signupBtn.addEventListener("click", async () => {
-      try {
-        const email = $("#email")?.value.trim();
-        const password = $("#password")?.value;
-        if (!email || !password) return alert("Email + password required.");
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) return alert(error.message);
-        alert("Check your inbox to confirm your email.");
-      } catch (e) {
-        alert(e.message || String(e));
-      }
-    });
+  $("#signup")?.addEventListener("click", async () => {
+    const email = $("#email")?.value.trim();
+    const password = $("#password")?.value;
+    if (!email || !password) return alert("Email + password required.");
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) return alert(error.message);
+    alert("Check your inbox to confirm your email.");
+  });
 
   // Sign in
-  const signinBtn = $("#signin");
-  if (signinBtn)
-    signinBtn.addEventListener("click", async () => {
-      try {
-        const email = $("#email")?.value.trim();
-        const password = $("#password")?.value;
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) return alert(error.message);
-      } catch (e) {
-        alert(e.message || String(e));
-      }
+  $("#signin")?.addEventListener("click", async () => {
+    const email = $("#email")?.value.trim();
+    const password = $("#password")?.value;
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
+    if (error) return alert(error.message);
+  });
 
   // Magic link
-  const magicBtn = $("#send-link");
-  if (magicBtn)
-    magicBtn.addEventListener("click", async () => {
-      try {
-        const email = $("#email")?.value.trim();
-        if (!email) return alert("Enter your email.");
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo: location.href },
-        });
-        if (error) return alert(error.message);
-        alert("Magic link sent.");
-      } catch (e) {
-        alert(e.message || String(e));
-      }
+  $("#send-link")?.addEventListener("click", async () => {
+    const email = $("#email")?.value.trim();
+    if (!email) return alert("Enter your email.");
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: location.href },
     });
+    if (error) return alert(error.message);
+    alert("Magic link sent.");
+  });
 
-  // Legacy Sign out (topbar button, if visible)
-  const signoutBtn = $("#signout");
-  if (signoutBtn)
-    signoutBtn.addEventListener("click", async () => {
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        alert(e.message || String(e));
-      }
-    });
+  // Sign out button (legacy — still in DOM; real menu also wires sign out)
+  $("#signout")?.addEventListener("click", async () => {
+    await supabase.auth.signOut();
+  });
 
   // Session change
   supabase.auth.onAuthStateChange(async (_evt, session) => {
@@ -146,15 +160,17 @@ function toggleAuthBar(user) {
 
   const isLogged = !!user;
 
-  // Show/hide legacy signout button safely
-  const legacy = $("#signout");
-  if (legacy) legacy.style.display = isLogged ? "" : "none";
+  // Show/hide legacy signout button
+  const signoutBtn = $("#signout");
+  if (signoutBtn) signoutBtn.style.display = isLogged ? "" : "none";
 
   // Inputs visibility
-  ["#email", "#password", "#signup", "#signin", "#send-link"].forEach((sel) => {
-    const el = $(sel);
-    if (el) el.style.display = isLogged ? "none" : "";
-  });
+  ["#email", "#password", "#signup", "#signin", "#send-link"].forEach(
+    (sel) => {
+      const el = $(sel);
+      if (el) el.style.display = isLogged ? "none" : "";
+    }
+  );
 
   // Inject or remove the user menu
   let menu = $("#user-menu");
@@ -168,57 +184,38 @@ function toggleAuthBar(user) {
       menu.innerHTML = `
         <span class="muted small">Welcome</span>
         <span id="user-email" class="pill">${user.email || "You"}</span>
-        <div class="dropdown" style="position:relative;">
+        <div class="dropdown">
           <button id="user-menu-btn" class="btn">☰</button>
-          <div id="user-menu-panel"
-               style="position:absolute; right:0; top:calc(100% + 8px); display:none; min-width:180px;
-                      z-index: 2000; pointer-events:auto; background:#0e1636; border:1px solid #243055; border-radius:12px;">
-            <div style="padding:8px 10px; display:flex; flex-direction:column; gap:6px;">
-              <a id="menu-membership" class="btn" style="display:block; width:100%; text-align:left;">Membership</a>
+          <div id="user-menu-panel" class="table-wrap" style="position:absolute; right:20px; margin-top:36px; display:none; min-width:160px; z-index:50;">
+            <div style="padding:8px 10px;">
+              <a id="menu-membership" class="btn" style="display:block; width:100%; margin-bottom:6px; text-align:left;">Membership</a>
               <button id="menu-logout" class="btn btn-ghost" style="width:100%; text-align:left;">Log out</button>
             </div>
           </div>
         </div>
       `;
       authWrap.appendChild(menu);
-
-      // Wire dropdown open/close
-      const btn = $("#user-menu-btn");
-      if (btn)
-        btn.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          const p = $("#user-menu-panel");
-          if (!p) return;
-          p.style.display = p.style.display === "none" || !p.style.display ? "block" : "none";
-        });
-      document.addEventListener(
-        "click",
-        (e) => {
-          const p = $("#user-menu-panel");
-          if (!p) return;
-          const inside = e.target.closest("#user-menu-panel") || e.target.closest("#user-menu-btn");
-          if (!inside) p.style.display = "none";
-        },
-        { capture: true }
-      );
-      const membership = $("#menu-membership");
-      if (membership) membership.addEventListener("click", () => alert("Membership page coming soon."));
-      const logout = $("#menu-logout");
-      if (logout)
-        logout.addEventListener("click", async () => {
-          try {
-            await supabase.auth.signOut();
-            // also clear local state
-            State.activeBankrollId = null;
-            localStorage.removeItem("quantara_active_bankroll_id");
-            State.bankrolls = [];
-            State.bets = [];
-            switchTab("home");
-          } catch (e) {
-            alert(e.message || String(e));
-          }
-        });
+      // Wire dropdown
+      $("#user-menu-btn").addEventListener("click", () => {
+        const p = $("#user-menu-panel");
+        p.style.display = p.style.display === "none" ? "block" : "none";
+      });
+      document.addEventListener("click", (e) => {
+        const p = $("#user-menu-panel");
+        if (!p) return;
+        const inside =
+          e.target.closest("#user-menu-panel") ||
+          e.target.closest("#user-menu-btn");
+        if (!inside) p.style.display = "none";
+      });
+      $("#menu-membership").addEventListener("click", () => {
+        alert("Membership page coming soon.");
+      });
+      $("#menu-logout").addEventListener("click", async () => {
+        await supabase.auth.signOut();
+      });
     } else {
+      // Update email if already exists
       const emailSpan = $("#user-email");
       if (emailSpan) emailSpan.textContent = user.email || "You";
     }
@@ -228,19 +225,20 @@ function toggleAuthBar(user) {
   }
 }
 
-// ===============================
+// ───────────────────────────────
 // Router
-// ===============================
+// ───────────────────────────────
 function switchTab(tab) {
   State.activeTab = tab;
   $$(".tabs .tab").forEach((btn) => btn.classList.remove("active"));
-  const tabBtn = $(`#tab-btn-${tab}`);
-  if (tabBtn) tabBtn.classList.add("active");
+  $(`#tab-btn-${tab}`)?.classList.add("active");
 
-  ["home", "overview", "analytics", "roi", "calendar", "tools"].forEach((id) => {
-    const el = $(`#tab-${id}`);
-    if (el) el.classList.toggle("hidden", id !== tab);
-  });
+  ["home", "overview", "analytics", "roi", "calendar", "tools"].forEach(
+    (id) => {
+      const el = $(`#tab-${id}`);
+      if (el) el.classList.toggle("hidden", id !== tab);
+    }
+  );
 
   if (tab === "home") renderHome();
   if (tab === "overview") renderOverview();
@@ -250,10 +248,11 @@ function switchTab(tab) {
   if (tab === "tools") renderToolsLanding();
 }
 
-// ===============================
+// ───────────────────────────────
 // Load everything after login or on boot
-// ===============================
+// ───────────────────────────────
 async function loadEverything() {
+  if (PublicViewSlug) return; // handled in loadPublicView
   await loadBankrolls();
   if (
     State.activeBankrollId &&
@@ -270,9 +269,82 @@ async function loadEverything() {
   renderCalendar();
 }
 
-// ===============================
+// ───────────────────────────────
+// Public view (read-only via ?view=<slug>)
+// ───────────────────────────────
+async function loadPublicView(slug) {
+  // Try fetch bankroll by slug (must have public policies on)
+  const { data: bks, error: e1 } = await supabase
+    .from("bankrolls")
+    .select("*")
+    .eq("public_slug", slug)
+    .eq("published", true)
+    .limit(1);
+  if (e1) {
+    renderPublicError(
+      "This link requires DB policies for public read access. Apply the SQL migration and try again."
+    );
+    return;
+  }
+  const bk = (bks && bks[0]) || null;
+  if (!bk) {
+    renderPublicError(
+      "This shared bankroll was not found or is not published."
+    );
+    return;
+  }
+  State.bankrolls = [bk];
+  State.activeBankrollId = bk.id;
+
+  // Load bets belonging to this bankroll (public policy required)
+  const { data: bets, error: e2 } = await supabase
+    .from("bets")
+    .select("*")
+    .eq("bankroll_id", bk.id)
+    .order("date", { ascending: true });
+  if (e2) {
+    renderPublicError(
+      "Bets cannot be loaded. Ensure public read policies for published bankrolls are enabled."
+    );
+    return;
+  }
+  State.bets = bets || [];
+
+  // Render read-only
+  renderOverview();
+  renderAnalytics();
+  renderROI();
+  renderCalendar();
+
+  // Lock UI to read-only
+  disableOwnerOnlyUI();
+}
+function renderPublicError(msg) {
+  // minimal message into the home grid
+  const grid = $("#bankroll-grid");
+  if (grid) grid.innerHTML = `<div class="muted">${msg}</div>`;
+  // also hide forms/buttons across tabs
+  disableOwnerOnlyUI(true);
+}
+function disableOwnerOnlyUI(hideHome = false) {
+  // hide auth / creation / edit buttons in public view
+  $(".auth")?.classList.add("hidden");
+  $("#btn-new-bankroll")?.setAttribute("disabled", "true");
+  $("#btn-clear-active")?.setAttribute("disabled", "true");
+  $("#add-form")?.querySelectorAll("input,select,button").forEach((el) =>
+    el.setAttribute("disabled", "true")
+  );
+  // Edit buttons in ledger
+  $$("#ledger .action-btn").forEach((el) => el.setAttribute("disabled", "true"));
+  // Save bankroll start
+  $("#save-bankroll")?.setAttribute("disabled", "true");
+  // Tools are still fine (local)
+  if (hideHome) $("#tab-home")?.classList.add("hidden");
+}
+
+// ───────────────────────────────
 // Bankrolls
-// ===============================
+// ───────────────────────────────
 async function loadBankrolls() {
   if (!State.user) {
     State.bankrolls = [];
@@ -294,15 +366,12 @@ async function loadBankrolls() {
 function renderHome() {
   // Current selection
   const curr = State.bankrolls.find((b) => b.id === State.activeBankrollId);
-  const currEl = $("#current-bk");
-  if (currEl)
-    currEl.textContent = curr
-      ? `${curr.name} — ${fmtEur(curr.start_amount || 0)}`
-      : "None selected";
+  $("#current-bk").textContent = curr
+    ? `${curr.name} — ${fmtEur(curr.start_amount || 0)}`
+    : "None selected";
 
   // Grid
   const wrap = $("#bankroll-grid");
-  if (!wrap) return;
   wrap.innerHTML = "";
   if (!State.user) {
     wrap.innerHTML = `<div class="muted">Sign in to create bankrolls.</div>`;
@@ -330,6 +399,7 @@ function renderHome() {
       <div class="bankroll-actions">
         <button class="btn" data-open="${bk.id}">Open</button>
         <button class="btn btn-ghost" data-rename="${bk.id}">Rename</button>
+        <button class="btn btn-ghost" data-share="${bk.id}">Share</button>
         <button class="btn btn-ghost" data-delete="${bk.id}">Delete</button>
       </div>
     `;
@@ -347,7 +417,10 @@ function renderHome() {
   wrap.querySelectorAll("button[data-open]").forEach((btn) => {
     btn.addEventListener("click", () => {
       State.activeBankrollId = btn.getAttribute("data-open");
-      localStorage.setItem("quantara_active_bankroll_id", State.activeBankrollId);
+      localStorage.setItem(
+        "quantara_active_bankroll_id",
+        State.activeBankrollId
+      );
       switchTab("overview");
     });
   });
@@ -357,12 +430,24 @@ function renderHome() {
       const bk = State.bankrolls.find((b) => b.id === id);
       const name = prompt("New name", bk?.name || "");
       if (!name) return;
-      const { error } = await supabase.from("bankrolls").update({ name }).eq("id", id);
+      const { error } = await supabase
+        .from("bankrolls")
+        .update({ name })
+        .eq("id", id);
       if (error) return alert(error.message);
       await loadBankrolls();
       renderHome();
     });
   });
+
+  // Share button
+  wrap.querySelectorAll("button[data-share]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.getAttribute("data-share");
+      await handleShareClick(id);
+    });
+  });
+
   wrap.querySelectorAll("button[data-delete]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-delete");
@@ -380,19 +465,53 @@ function renderHome() {
   });
 }
 
+async function handleShareClick(bkId) {
+  if (!State.db.hasSharingColumns) {
+    alert(
+      "Sharing is not configured in your database.\n\nRun the SQL migration that adds:\n- columns: public_slug text unique, published boolean\n- public read policies for published bankrolls/bets\n\nAfter that, try again."
+    );
+    return;
+  }
+  const bk = State.bankrolls.find((b) => b.id === bkId);
+  if (!bk) return;
+  let slug = bk.public_slug;
+  if (!slug) {
+    slug = makeSlug();
+    const { error } = await supabase
+      .from("bankrolls")
+      .update({ public_slug: slug, published: true })
+      .eq("id", bkId);
+    if (error) {
+      alert(
+        "Could not enable sharing. If the error mentions 'public_slug', run the DB migration first."
+      );
+      return;
+    }
+    // refresh in-memory
+    bk.public_slug = slug;
+    bk.published = true;
+  } else if (!bk.published) {
+    await supabase.from("bankrolls").update({ published: true }).eq("id", bkId);
+    bk.published = true;
+  }
+
+  const link = buildPublicLink(slug);
+  await copyToClipboard(link);
+  alert(`Public link copied to clipboard:\n\n${link}\n\nAnyone can view this read-only.`);
+}
+
 function countBetsPerBk() {
   const map = {};
-  for (const b of State.bets) map[b.bankroll_id] = (map[b.bankroll_id] || 0) + 1;
+  for (const b of State.bets)
+    map[b.bankroll_id] = (map[b.bankroll_id] || 0) + 1;
   return map;
 }
 
 window.__openBkModal = () => {
-  const m = $("#bk-modal");
-  if (m) m.classList.remove("hidden");
-  const n = $("#bk-name");
-  const s = $("#bk-start");
-  if (n) n.value = "";
-  if (s) s.value = "";
+  if (!State.user) return alert("Sign in first.");
+  $("#bk-modal").classList.remove("hidden");
+  $("#bk-name").value = "";
+  $("#bk-start").value = "";
 };
 window.__clearActive = () => {
   State.activeBankrollId = null;
@@ -401,46 +520,38 @@ window.__clearActive = () => {
 };
 
 function wireBankrollModal() {
-  const close = $("#bk-close");
-  if (close) close.addEventListener("click", () => $("#bk-modal")?.classList.add("hidden"));
-  const cancel = $("#bk-cancel");
-  if (cancel) cancel.addEventListener("click", () => $("#bk-modal")?.classList.add("hidden"));
+  $("#bk-close")?.addEventListener("click", () =>
+    $("#bk-modal").classList.add("hidden")
+  );
+  $("#bk-cancel")?.addEventListener("click", () =>
+    $("#bk-modal").classList.add("hidden")
+  );
+  $("#bk-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!State.user) return alert("Sign in first.");
+    const name = $("#bk-name").value.trim();
+    const start = Number($("#bk-start").value || 0);
+    if (!name) return;
 
-  const form = $("#bk-form");
-  if (form)
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      try {
-        if (!State.user) return alert("Sign in first.");
-        const name = $("#bk-name")?.value.trim();
-        const start = Number($("#bk-start")?.value || 0);
-        if (!name) return;
+    // Insert and return row
+    const { data, error } = await supabase
+      .from("bankrolls")
+      .insert({ user_id: State.user.id, name, start_amount: start })
+      .select()
+      .single();
 
-        // Insert and get created row (id) back
-        const { data, error } = await supabase
-          .from("bankrolls")
-          .insert({ user_id: State.user.id, name, start_amount: start })
-          .select()
-          .single();
+    if (error) return alert(error.message);
+    $("#bk-modal").classList.add("hidden");
+    await loadBankrolls();
+    renderHome();
 
-        if (error) return alert(error.message);
-
-        const modal = $("#bk-modal");
-        if (modal) modal.classList.add("hidden");
-        await loadBankrolls();
-
-        // Select new bankroll immediately
-        if (data?.id) {
-          State.activeBankrollId = data.id;
-          localStorage.setItem("quantara_active_bankroll_id", data.id);
-          switchTab("overview");
-        } else {
-          renderHome();
-        }
-      } catch (err) {
-        alert(err.message || String(err));
-      }
-    });
+    // Optionally show where to find the share link
+    if (State.db.hasSharingColumns) {
+      alert(
+        "Bankroll created.\n\nYou can share it later from the Home list (Share button) or from Overview > Settings (Share box)."
+      );
+    }
+  });
 }
 
 // Helper: get active bankroll record
@@ -448,9 +559,9 @@ function currentBk() {
   return State.bankrolls.find((b) => b.id === State.activeBankrollId) || null;
 }
 
-// ===============================
+// ───────────────────────────────
 // Bets
-// ===============================
+// ───────────────────────────────
 async function loadBets() {
   if (!State.user) {
     State.bets = [];
@@ -470,63 +581,52 @@ async function loadBets() {
 }
 
 function wireLedgerUI() {
-  const addForm = $("#add-form");
-  if (addForm)
-    addForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      try {
-        if (!State.user) return alert("Sign in first.");
-        const bk = currentBk();
-        if (!bk) return alert("Select a bankroll in Home.");
-        const row = {
-          user_id: State.user.id,
-          bankroll_id: bk.id,
-          date: $("#f-date")?.value || new Date().toISOString().slice(0, 10),
-          sport: $("#f-sport")?.value.trim(),
-          league: $("#f-league")?.value.trim() || null,
-          market: $("#f-market")?.value.trim() || null,
-          selection: $("#f-selection")?.value.trim() || null,
-          odds: Number($("#f-odds")?.value || 0),
-          stake: Number($("#f-stake")?.value || 0),
-          result: $("#f-result")?.value || "pending",
-        };
-        const { error } = await supabase.from("bets").insert(row);
-        if (error) return alert(error.message);
-        const sel = $("#f-selection");
-        if (sel) sel.value = "";
-        await loadBets();
-        renderOverview();
-        renderAnalytics();
-        renderROI();
-        renderCalendar();
-      } catch (err) {
-        alert(err.message || String(err));
-      }
-    });
+  $("#add-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!State.user) return alert("Sign in first.");
+    const bk = currentBk();
+    if (!bk) return alert("Select a bankroll in Home.");
+    const row = {
+      user_id: State.user.id,
+      bankroll_id: bk.id,
+      date: $("#f-date").value || new Date().toISOString().slice(0, 10),
+      sport: $("#f-sport").value.trim(),
+      league: $("#f-league").value.trim() || null,
+      market: $("#f-market").value.trim() || null,
+      selection: $("#f-selection").value.trim() || null,
+      odds: Number($("#f-odds").value || 0),
+      stake: Number($("#f-stake").value || 0),
+      result: $("#f-result").value || "pending",
+    };
+    const { error } = await supabase.from("bets").insert(row);
+    if (error) return alert(error.message);
+    $("#f-selection").value = "";
+    await loadBets();
+    renderOverview();
+    renderAnalytics();
+    renderROI();
+    renderCalendar();
+  });
 }
 
 function renderOverview() {
   const bk = currentBk();
-  const name1 = $("#bk-name-inline");
-  if (name1) name1.textContent = bk?.name || "—";
-  const name2 = $("#bk-name-inline-2");
-  if (name2) name2.textContent = bk?.name || "—";
+  $("#bk-name-inline").textContent = bk?.name || "—";
+  $("#bk-name-inline-2").textContent = bk?.name || "—";
+
+  // Inject a "Share box" into the Settings card (rightmost in Overview)
+  ensureShareBox(bk);
 
   if (!bk) {
-    const el1 = $("#bankroll");
-    if (el1) el1.textContent = "€0";
-    const el2 = $("#staked");
-    if (el2) el2.textContent = "€0";
-    const el3 = $("#winrate");
-    if (el3) el3.textContent = "0%";
-    const st = $("#bankroll-start");
-    if (st) st.value = "";
+    $("#bankroll").textContent = "€0";
+    $("#staked").textContent = "€0";
+    $("#winrate").textContent = "0%";
+    $("#bankroll-start").value = "";
     renderBankrollChart([]);
     renderLedger([]);
     return;
   }
-  const st0 = $("#bankroll-start");
-  if (st0) st0.value = bk.start_amount || 0;
+  $("#bankroll-start").value = bk.start_amount || 0;
 
   const bets = State.bets.filter((b) => b.bankroll_id === bk.id);
   const settled = bets.filter(
@@ -537,12 +637,9 @@ function renderOverview() {
   const wins = settled.filter((b) => b.result === "win").length;
   const wr = settled.length ? (wins / settled.length) * 100 : 0;
 
-  const elB = $("#bankroll");
-  if (elB) elB.textContent = fmtEur((bk.start_amount || 0) + pnl);
-  const elS = $("#staked");
-  if (elS) elS.textContent = fmtEur(staked);
-  const elW = $("#winrate");
-  if (elW) elW.textContent = fmtPct(wr);
+  $("#bankroll").textContent = fmtEur((bk.start_amount || 0) + pnl);
+  $("#staked").textContent = fmtEur(staked);
+  $("#winrate").textContent = fmtPct(wr);
 
   // chart points
   const points = [];
@@ -563,24 +660,18 @@ function renderOverview() {
   renderLedger(bets);
 }
 
-const saveBtn = $("#save-bankroll");
-if (saveBtn)
-  saveBtn.addEventListener("click", async () => {
-    try {
-      const bk = currentBk();
-      if (!bk) return alert("Pick a bankroll in Home.");
-      const val = Number($("#bankroll-start")?.value || 0);
-      const { error } = await supabase
-        .from("bankrolls")
-        .update({ start_amount: val })
-        .eq("id", bk.id);
-      if (error) return alert(error.message);
-      await loadBankrolls();
-      renderOverview();
-    } catch (e) {
-      alert(e.message || String(e));
-    }
-  });
+$("#save-bankroll")?.addEventListener("click", async () => {
+  const bk = currentBk();
+  if (!bk) return alert("Pick a bankroll in Home.");
+  const val = Number($("#bankroll-start").value || 0);
+  const { error } = await supabase
+    .from("bankrolls")
+    .update({ start_amount: val })
+    .eq("id", bk.id);
+  if (error) return alert(error.message);
+  await loadBankrolls();
+  renderOverview();
+});
 
 function renderBankrollChart(points) {
   const ctx = $("#bankrollChart");
@@ -590,7 +681,13 @@ function renderBankrollChart(points) {
     type: "line",
     data: {
       datasets: [
-        { label: "Bankroll", data: points, tension: 0.35, borderWidth: 2, fill: true },
+        {
+          label: "Bankroll",
+          data: points,
+          tension: 0.35,
+          borderWidth: 2,
+          fill: true,
+        },
       ],
     },
     options: {
@@ -621,7 +718,8 @@ function renderMonthTabs(bets) {
   if (!wrap) return;
   wrap.innerHTML = "";
   const btnAll = document.createElement("button");
-  btnAll.className = "month-tab" + (LedgerFilter.monthKey === "ALL" ? " active" : "");
+  btnAll.className =
+    "month-tab" + (LedgerFilter.monthKey === "ALL" ? " active" : "");
   btnAll.innerHTML = `All <span class="month-pill ${
     sumPnl(bets) >= 0 ? "pos" : "neg"
   }">${fmtEur(sumPnl(bets))}</span>`;
@@ -638,7 +736,8 @@ function renderMonthTabs(bets) {
       month: "long",
     });
     const btn = document.createElement("button");
-    btn.className = "month-tab" + (LedgerFilter.monthKey === k ? " active" : "");
+    btn.className =
+      "month-tab" + (LedgerFilter.monthKey === k ? " active" : "");
     btn.innerHTML = `${label} <span class="month-pill ${
       sumPnl(arr) >= 0 ? "pos" : "neg"
     }">${fmtEur(sumPnl(arr))}</span>`;
@@ -686,67 +785,70 @@ function renderLedger(bets) {
         p
       )}</td>
       <td class="right actions">
-        <button class="action-btn action-edit" data-edit="${b.id}">Edit</button>
-        <button class="action-btn action-del" data-del="${b.id}">Delete</button>
+        <button class="action-btn action-edit" data-edit="${b.id}" ${
+      PublicViewSlug ? "disabled" : ""
+    }>Edit</button>
+        <button class="action-btn action-del" data-del="${b.id}" ${
+      PublicViewSlug ? "disabled" : ""
+    }>Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
   }
   // wire actions
-  tbody.querySelectorAll("[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => openEditModal(btn.getAttribute("data-edit")));
-  });
-  tbody.querySelectorAll("[data-del]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("Delete this bet?")) return;
-      const id = btn.getAttribute("data-del");
-      await supabase.from("bets").delete().eq("id", id);
-      await loadBets();
-      renderOverview();
-      renderAnalytics();
-      renderROI();
-      renderCalendar();
+  if (!PublicViewSlug) {
+    tbody.querySelectorAll("[data-edit]").forEach((btn) => {
+      btn.addEventListener("click", () =>
+        openEditModal(btn.getAttribute("data-edit"))
+      );
     });
-  });
-}
-
-// ===============================
-// Edit modal
-// ===============================
-function wireEditModal() {
-  const close = $("#edit-close");
-  if (close) close.addEventListener("click", () => $("#edit-modal")?.classList.add("hidden"));
-  const cancel = $("#edit-cancel");
-  if (cancel) cancel.addEventListener("click", () => $("#edit-modal")?.classList.add("hidden"));
-  const form = $("#edit-form");
-  if (form)
-    form.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      try {
-        const id = $("#e-id")?.value;
-        const row = {
-          date: $("#e-date")?.value,
-          sport: $("#e-sport")?.value.trim(),
-          league: $("#e-league")?.value.trim() || null,
-          market: $("#e-market")?.value.trim() || null,
-          selection: $("#e-selection")?.value.trim() || null,
-          odds: Number($("#e-odds")?.value || 0),
-          stake: Number($("#e-stake")?.value || 0),
-          result: $("#e-result")?.value,
-        };
-        const { error } = await supabase.from("bets").update(row).eq("id", id);
-        if (error) return alert(error.message);
-        const modal = $("#edit-modal");
-        if (modal) modal.classList.add("hidden");
+    tbody.querySelectorAll("[data-del]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this bet?")) return;
+        const id = btn.getAttribute("data-del");
+        await supabase.from("bets").delete().eq("id", id);
         await loadBets();
         renderOverview();
         renderAnalytics();
         renderROI();
         renderCalendar();
-      } catch (err) {
-        alert(err.message || String(err));
-      }
+      });
     });
+  }
+}
+
+// ───────────────────────────────
+// Edit modal
+// ───────────────────────────────
+function wireEditModal() {
+  $("#edit-close")?.addEventListener("click", () =>
+    $("#edit-modal").classList.add("hidden")
+  );
+  $("#edit-cancel")?.addEventListener("click", () =>
+    $("#edit-modal").classList.add("hidden")
+  );
+  $("#edit-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const id = $("#e-id").value;
+    const row = {
+      date: $("#e-date").value,
+      sport: $("#e-sport").value.trim(),
+      league: $("#e-league").value.trim() || null,
+      market: $("#e-market").value.trim() || null,
+      selection: $("#e-selection").value.trim() || null,
+      odds: Number($("#e-odds").value || 0),
+      stake: Number($("#e-stake").value || 0),
+      result: $("#e-result").value,
+    };
+    const { error } = await supabase.from("bets").update(row).eq("id", id);
+    if (error) return alert(error.message);
+    $("#edit-modal").classList.add("hidden");
+    await loadBets();
+    renderOverview();
+    renderAnalytics();
+    renderROI();
+    renderCalendar();
+  });
 }
 
 function openEditModal(id) {
@@ -761,13 +863,12 @@ function openEditModal(id) {
   $("#e-odds").value = b.odds || 1.01;
   $("#e-stake").value = b.stake || 0;
   $("#e-result").value = b.result || "pending";
-  const modal = $("#edit-modal");
-  if (modal) modal.classList.remove("hidden");
+  $("#edit-modal").classList.remove("hidden");
 }
 
-// ===============================
+// ───────────────────────────────
 // Analytics
-// ===============================
+// ───────────────────────────────
 function renderAnalytics() {
   const bk = currentBk();
   if (!bk) {
@@ -790,7 +891,10 @@ function renderAnalytics() {
   const pf = (() => {
     const g = settled
       .filter((b) => b.result === "win")
-      .reduce((s, b) => s + (Number(b.odds) - 1) * (Number(b.stake) || 0), 0);
+      .reduce(
+        (s, b) => s + (Number(b.odds) - 1) * (Number(b.stake) || 0),
+        0
+      );
     const l = settled
       .filter((b) => b.result === "loss")
       .reduce((s, b) => s + (Number(b.stake) || 0), 0);
@@ -798,20 +902,13 @@ function renderAnalytics() {
   })();
   const maxDD = computeMaxDrawdown(bk, settled);
 
-  const elNP = $("#an-net-profit");
-  if (elNP) elNP.textContent = fmtEur(net);
-  const elANST = $("#an-staked");
-  if (elANST) elANST.textContent = fmtEur(staked);
-  const elAvgSt = $("#avg-stake");
-  if (elAvgSt) elAvgSt.textContent = fmtEur(avgStake);
-  const elAvgO = $("#avg-odds");
-  if (elAvgO) elAvgO.textContent = (avgOdds || 0).toFixed(2);
-  const elWR = $("#an-winrate");
-  if (elWR) elWR.textContent = fmtPct(wr);
-  const elPF = $("#an-pf");
-  if (elPF) elPF.textContent = (pf || 0).toFixed(2);
-  const elDD = $("#max-dd");
-  if (elDD) elDD.textContent = fmtEur(maxDD);
+  $("#an-net-profit").textContent = fmtEur(net);
+  $("#an-staked").textContent = fmtEur(staked);
+  $("#avg-stake").textContent = fmtEur(avgStake);
+  $("#avg-odds").textContent = (avgOdds || 0).toFixed(2);
+  $("#an-winrate").textContent = fmtPct(wr);
+  $("#an-pf").textContent = (pf || 0).toFixed(2);
+  $("#max-dd").textContent = fmtEur(maxDD);
 
   const be = avgOdds ? 100 / avgOdds : 0;
   const edge = wr - be;
@@ -822,8 +919,7 @@ function renderAnalytics() {
     const k = b > 0 ? (b * p - q) / b : 0;
     return Math.max(0, k * 100);
   })();
-  const elEdge = $("#edge");
-  if (elEdge) elEdge.textContent = `${edge.toFixed(2)}% / ${kelly.toFixed(2)}%`;
+  $("#edge").textContent = `${edge.toFixed(2)}% / ${kelly.toFixed(2)}%`;
 
   renderBar("#pnlBySportChart", "pnlBySport", pnlBySport(bets));
   renderBar("#winRateBySportChart", "wrBySport", winRateBySport(bets), true);
@@ -843,11 +939,22 @@ function fillAnalyticsEmpty() {
     "#an-pf",
     "#max-dd",
     "#edge",
-  ].forEach((id) => {
-    const el = $(id);
-    if (el) el.textContent = id === "#avg-odds" ? "0.00" : id === "#an-winrate" ? "0%" : "€0";
-  });
-  ["pnlBySport", "wrBySport", "pnlMonth", "weekday", "oddsHist", "resultsPie"].forEach((k) => {
+  ].forEach((id) =>
+    ($(id).textContent =
+      id === "#avg-odds"
+        ? "0.00"
+        : id === "#an-winrate"
+        ? "0%"
+        : "€0")
+  );
+  [
+    "pnlBySport",
+    "wrBySport",
+    "pnlMonth",
+    "weekday",
+    "oddsHist",
+    "resultsPie",
+  ].forEach((k) => {
     if (State.charts[k]) {
       State.charts[k].destroy();
       delete State.charts[k];
@@ -874,7 +981,9 @@ function winRateBySport(bets) {
     if (["win", "loss", "void"].includes(b.result)) m.n++;
   }
   const labels = Object.keys(map);
-  const values = labels.map((l) => (map[l].n ? (map[l].w / map[l].n) * 100 : 0));
+  const values = labels.map((l) =>
+    map[l].n ? (map[l].w / map[l].n) * 100 : 0
+  );
   return { labels, values };
 }
 function pnlByMonth(bets) {
@@ -907,7 +1016,9 @@ function oddsHistogram(bets) {
     const k = (Math.floor(o * 10) / 10).toFixed(1); // 1.5, 1.6, ...
     buckets[k] = (buckets[k] || 0) + 1;
   }
-  const labels = Object.keys(buckets).sort((a, b) => parseFloat(a) - parseFloat(b));
+  const labels = Object.keys(buckets).sort(
+    (a, b) => parseFloat(a) - parseFloat(b)
+  );
   const values = labels.map((l) => buckets[l]);
   return { labels, values };
 }
@@ -935,7 +1046,8 @@ function renderBar(canvasSel, key, { labels, values }, isPct = false) {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (c) => (isPct ? `${c.parsed.y.toFixed(1)}%` : fmtEur(c.parsed.y)),
+            label: (c) =>
+              isPct ? `${c.parsed.y.toFixed(1)}%` : fmtEur(c.parsed.y),
           },
         },
       },
@@ -950,7 +1062,11 @@ function renderPie(canvasSel, key, { labels, values }) {
   State.charts[key] = new Chart(ctx, {
     type: "pie",
     data: { labels, datasets: [{ data: values }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom" } },
+    },
   });
 }
 function computeMaxDrawdown(bk, settled) {
@@ -974,18 +1090,16 @@ function computeMaxDrawdown(bk, settled) {
   return maxDD;
 }
 
-// ===============================
+// ───────────────────────────────
 // ROI
-// ===============================
+// ───────────────────────────────
 function renderROI() {
   const bk = currentBk();
   if (!bk) {
-    ["#roi-overall", "#roi-settled", "#roi-profit", "#roi-stake"].forEach((id) => {
-      const el = $(id);
-      if (el) el.textContent = "0";
-    });
-    const body = $("#roi-tbody");
-    if (body) body.innerHTML = "";
+    ["#roi-overall", "#roi-settled", "#roi-profit", "#roi-stake"].forEach(
+      (id) => ($(id).textContent = "0")
+    );
+    $("#roi-tbody").innerHTML = "";
     return;
   }
   const bets = State.bets.filter((b) => b.bankroll_id === bk.id);
@@ -995,14 +1109,10 @@ function renderROI() {
   const stake = settled.reduce((s, b) => s + (Number(b.stake) || 0), 0);
   const profit = settled.reduce((s, b) => s + profitOf(b), 0);
   const roi = stake > 0 ? (profit / stake) * 100 : 0;
-  const elRoi = $("#roi-overall");
-  if (elRoi) elRoi.textContent = fmtPct(roi);
-  const elSet = $("#roi-settled");
-  if (elSet) elSet.textContent = settled.length;
-  const elProf = $("#roi-profit");
-  if (elProf) elProf.textContent = fmtEur(profit);
-  const elStk = $("#roi-stake");
-  if (elStk) elStk.textContent = fmtEur(stake);
+  $("#roi-overall").textContent = fmtPct(roi);
+  $("#roi-settled").textContent = settled.length;
+  $("#roi-profit").textContent = fmtEur(profit);
+  $("#roi-stake").textContent = fmtEur(stake);
 
   const bySport = {};
   for (const b of settled) {
@@ -1013,7 +1123,6 @@ function renderROI() {
     r.profit += profitOf(b);
   }
   const tbody = $("#roi-tbody");
-  if (!tbody) return;
   tbody.innerHTML = "";
   for (const [sport, r] of Object.entries(bySport)) {
     const tr = document.createElement("tr");
@@ -1029,63 +1138,55 @@ function renderROI() {
   }
 }
 
-// ===============================
+// ───────────────────────────────
 // Calendar
-// ===============================
+// ───────────────────────────────
 function wireCalendarUI() {
-  const prev = $("#cal-prev");
-  if (prev)
-    prev.addEventListener("click", () => {
-      const c = State.calendar;
-      c.month--;
-      if (c.month < 0) {
-        c.month = 11;
-        c.year--;
-      }
-      renderCalendar();
-    });
-  const next = $("#cal-next");
-  if (next)
-    next.addEventListener("click", () => {
-      const c = State.calendar;
-      c.month++;
-      if (c.month > 11) {
-        c.month = 0;
-        c.year++;
-      }
-      renderCalendar();
-    });
-  const clear = $("#clear-filter");
-  if (clear)
-    clear.addEventListener("click", () => {
-      const tb = $("#day-tbody");
-      if (tb) tb.innerHTML = "";
-      const sel = $("#day-selected");
-      if (sel) sel.textContent = "—";
-      const pnl = $("#day-pnl");
-      if (pnl) pnl.textContent = "€0";
-      renderCalendar();
-    });
+  $("#cal-prev")?.addEventListener("click", () => {
+    const c = State.calendar;
+    c.month--;
+    if (c.month < 0) {
+      c.month = 11;
+      c.year--;
+    }
+    renderCalendar();
+  });
+  $("#cal-next")?.addEventListener("click", () => {
+    const c = State.calendar;
+    c.month++;
+    if (c.month > 11) {
+      c.month = 0;
+      c.year++;
+    }
+    renderCalendar();
+  });
+  $("#clear-filter")?.addEventListener("click", () => {
+    $("#day-tbody").innerHTML = "";
+    $("#day-selected").textContent = "—";
+    $("#day-pnl").textContent = "€0";
+    renderCalendar();
+  });
 }
 
 function renderCalendar() {
   const bk = currentBk();
-  const grid = $("#calendar-grid");
-  if (grid) grid.innerHTML = "";
-  const title = $("#cal-title");
-  if (title)
-    title.textContent = new Date(State.calendar.year, State.calendar.month, 1).toLocaleDateString(
-      undefined,
-      { year: "numeric", month: "long" }
-    );
+  $("#calendar-grid").innerHTML = "";
+  $("#cal-title").textContent = new Date(
+    State.calendar.year,
+    State.calendar.month,
+    1
+  ).toLocaleDateString(undefined, { year: "numeric", month: "long" });
   if (!bk) return;
 
   const bets = State.bets.filter((b) => b.bankroll_id === bk.id);
   const first = new Date(State.calendar.year, State.calendar.month, 1);
   const startDay = first.getDay(); // 0..6
-  const daysInMonth = new Date(State.calendar.year, State.calendar.month + 1, 0).getDate();
-
-  if (!grid) return;
+  const daysInMonth = new Date(
+    State.calendar.year,
+    State.calendar.month + 1,
+    0
+  ).getDate();
+  const grid = $("#calendar-grid");
 
   const dayPnL = {};
   const byDayRows = {};
@@ -1093,7 +1194,10 @@ function renderCalendar() {
     const d = b.date;
     if (!d) continue;
     const dt = new Date(d + "T00:00:00");
-    if (dt.getFullYear() === State.calendar.year && dt.getMonth() === State.calendar.month) {
+    if (
+      dt.getFullYear() === State.calendar.year &&
+      dt.getMonth() === State.calendar.month
+    ) {
       const day = dt.getDate();
       dayPnL[day] = (dayPnL[day] || 0) + profitOf(b);
       (byDayRows[day] ||= []).push(b);
@@ -1118,11 +1222,12 @@ function renderCalendar() {
     cell.addEventListener("click", () => {
       $$(".calendar-grid .cell").forEach((c) => c.classList.remove("active"));
       cell.classList.add("active");
-      const daySel = $("#day-selected");
-      if (daySel)
-        daySel.textContent = new Date(State.calendar.year, State.calendar.month, d).toDateString();
-      const dayPnl = $("#day-pnl");
-      if (dayPnl) dayPnl.textContent = fmtEur(amt);
+      $("#day-selected").textContent = new Date(
+        State.calendar.year,
+        State.calendar.month,
+        d
+      ).toDateString();
+      $("#day-pnl").textContent = fmtEur(amt);
       renderDayTable(byDayRows[d] || []);
     });
     grid.appendChild(cell);
@@ -1130,7 +1235,6 @@ function renderCalendar() {
 }
 function renderDayTable(rows) {
   const tb = $("#day-tbody");
-  if (!tb) return;
   tb.innerHTML = "";
   for (const b of rows) {
     const p = profitOf(b);
@@ -1148,16 +1252,13 @@ function renderDayTable(rows) {
   }
 }
 
-// ===============================
+// ───────────────────────────────
 // Tools (Risk / Poisson / Masaniello)
-// ===============================
+// ───────────────────────────────
 function wireToolsUI() {
-  const riskBtn = $("#tool-btn-risk");
-  if (riskBtn) riskBtn.addEventListener("click", () => showTool("risk"));
-  const poiBtn = $("#tool-btn-poisson");
-  if (poiBtn) poiBtn.addEventListener("click", () => showTool("poisson"));
-  const masaBtn = $("#tool-btn-masa");
-  if (masaBtn) masaBtn.addEventListener("click", () => showTool("masa"));
+  $("#tool-btn-risk")?.addEventListener("click", () => showTool("risk"));
+  $("#tool-btn-poisson")?.addEventListener("click", () => showTool("poisson"));
+  $("#tool-btn-masa")?.addEventListener("click", () => showTool("masa"));
 
   // Sync number + range
   const link = (numSel, rangeSel) => {
@@ -1171,39 +1272,30 @@ function wireToolsUI() {
   link("#rk-cap", "#rk-cap-range");
   link("#ms-p", "#ms-p-range");
 
-  const rkRun = $("#rk-run");
-  if (rkRun) rkRun.addEventListener("click", runRisk);
-  const psRun = $("#ps-run");
-  if (psRun) psRun.addEventListener("click", runPoisson);
+  $("#rk-run")?.addEventListener("click", runRisk);
+  $("#ps-run")?.addEventListener("click", runPoisson);
 
-  const msRun = $("#ms-run");
-  if (msRun) msRun.addEventListener("click", runMasaniello);
-  const msSave = $("#ms-save");
-  if (msSave) msSave.addEventListener("click", saveMasaniello);
-  const msDel = $("#ms-delete");
-  if (msDel) msDel.addEventListener("click", deleteMasaniello);
+  $("#ms-run")?.addEventListener("click", runMasaniello);
+  $("#ms-save")?.addEventListener("click", saveMasaniello);
+  $("#ms-delete")?.addEventListener("click", deleteMasaniello);
   loadMasanielloList();
 }
 
 function showTool(which) {
   $$(".tools-nav .chip").forEach((c) => c.classList.remove("active"));
-  const btn = $(`#tool-btn-${which}`);
-  if (btn) btn.classList.add("active");
-  ["risk", "poisson", "masa"].forEach((k) => {
-    const p = $(`#tools-${k}`);
-    if (p) p.classList.add("hidden");
-  });
-  const panel = $(`#tools-${which}`);
-  if (panel) panel.classList.remove("hidden");
+  $(`#tool-btn-${which}`).classList.add("active");
+  ["risk", "poisson", "masa"]
+    .forEach((k) => $(`#tools-${k}`).classList.add("hidden"));
+  $(`#tools-${which}`).classList.remove("hidden");
 }
 function renderToolsLanding() {}
 
 // ---- Risk
 function runRisk() {
-  const BR = Number($("#rk-bankroll")?.value || 0);
-  const odds = Number($("#rk-odds")?.value || 0);
-  const p = Number($("#rk-prob")?.value || 0) / 100;
-  const capPct = Number($("#rk-cap")?.value || 0) / 100;
+  const BR = Number($("#rk-bankroll").value || 0);
+  const odds = Number($("#rk-odds").value || 0);
+  const p = Number($("#rk-prob").value || 0) / 100;
+  const capPct = Number($("#rk-cap").value || 0) / 100;
 
   if (BR <= 0 || odds <= 1.01) return alert("Enter bankroll and odds.");
 
@@ -1215,24 +1307,21 @@ function runRisk() {
   const kelly = b > 0 ? Math.max(0, (b * p - q) / b) : 0;
   const kellyPct = kelly * 100;
 
-  const beEl = $("#rk-be");
-  if (beEl) beEl.textContent = `${be.toFixed(2)}%`;
-  const edgeEl = $("#rk-edge");
-  if (edgeEl) edgeEl.textContent = `${edge.toFixed(2)}%`;
-  const evEl = $("#rk-ev");
-  if (evEl) evEl.textContent = fmtEur(evPer1);
-  const kEl = $("#rk-kelly");
-  if (kEl) kEl.textContent = `${kellyPct.toFixed(2)}%`;
+  $("#rk-be").textContent = `${be.toFixed(2)}%`;
+  $("#rk-edge").textContent = `${edge.toFixed(2)}%`;
+  $("#rk-ev").textContent = fmtEur(evPer1);
+  $("#rk-kelly").textContent = `${kellyPct.toFixed(2)}%`;
 
   const flat = BR * 0.01;
   const halfK = BR * (kelly / 2);
   const capped = BR * Math.min(kelly, capPct);
 
-  renderBarSimple("rkStakeChart", "Stake size", ["Flat 1%", "Half Kelly", "Capped Kelly"], [
-    flat,
-    halfK,
-    capped,
-  ]);
+  renderBarSimple(
+    "rkStakeChart",
+    "Stake size",
+    ["Flat 1%", "Half Kelly", "Capped Kelly"],
+    [flat, halfK, capped]
+  );
 }
 function renderBarSimple(canvasId, label, labels, values) {
   const ctx = document.getElementById(canvasId);
@@ -1245,16 +1334,19 @@ function renderBarSimple(canvasId, label, labels, values) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtEur(c.parsed.y) } } },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (c) => fmtEur(c.parsed.y) } },
+      },
     },
   });
 }
 
 // ---- Poisson
 function runPoisson() {
-  const lamH = Number($("#ps-home")?.value || 0);
-  const lamA = Number($("#ps-away")?.value || 0);
-  const ouLine = Number($("#ps-ouline")?.value || 2.5);
+  const lamH = Number($("#ps-home").value || 0);
+  const lamA = Number($("#ps-away").value || 0);
+  const ouLine = Number($("#ps-ouline").value || 2.5);
 
   const maxG = 8;
   const pH = [];
@@ -1285,21 +1377,31 @@ function runPoisson() {
     if (tg > ouLine) over += totalGoals[tg];
   }
 
-  const phEl = $("#ps-ph");
-  if (phEl) phEl.textContent = fmtPct(ph * 100);
-  const pdEl = $("#ps-pd");
-  if (pdEl) pdEl.textContent = fmtPct(pd * 100);
-  const paEl = $("#ps-pa");
-  if (paEl) paEl.textContent = fmtPct(pa * 100);
-  const overEl = $("#ps-over");
-  if (overEl) overEl.textContent = fmtPct(over * 100);
-  const bttsEl = $("#ps-btts");
-  if (bttsEl) bttsEl.textContent = fmtPct(btts * 100);
+  $("#ps-ph").textContent = fmtPct(ph * 100);
+  $("#ps-pd").textContent = fmtPct(pd * 100);
+  $("#ps-pa").textContent = fmtPct(pa * 100);
+  $("#ps-over").textContent = fmtPct(over * 100);
+  $("#ps-btts").textContent = fmtPct(btts * 100);
 
-  renderBarSimple("ps1x2Chart", "Prob.", ["Home", "Draw", "Away"], [ph, pd, pa].map((x) => x * 100));
+  renderBarSimple(
+    "ps1x2Chart",
+    "Prob.",
+    ["Home", "Draw", "Away"],
+    [ph, pd, pa].map((x) => x * 100)
+  );
   const tgLabels = totalGoals.map((_, i) => i);
-  renderBarSimple("psGoalsChart", "%", tgLabels, totalGoals.map((x) => x * 100));
-  renderBarSimple("psBttsChart", "%", ["BTTS Yes", "BTTS No"], [btts * 100, (1 - btts) * 100]);
+  renderBarSimple(
+    "psGoalsChart",
+    "%",
+    tgLabels,
+    totalGoals.map((x) => x * 100)
+  );
+  renderBarSimple(
+    "psBttsChart",
+    "%",
+    ["BTTS Yes", "BTTS No"],
+    [btts * 100, (1 - btts) * 100]
+  );
 
   const rows = [
     ["Home", ph, 1 / ph],
@@ -1311,19 +1413,19 @@ function runPoisson() {
     ["BTTS No", 1 - btts, 1 / (1 - btts)],
   ];
   const tb = $("#ps-table");
-  if (tb) {
-    tb.innerHTML = "";
-    for (const r of rows) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${r[0]}</td><td class="right">${(r[1] * 100).toFixed(
-        2
-      )}%</td><td class="right">${isFinite(r[2]) ? r[2].toFixed(2) : "—"}</td>`;
-      tb.appendChild(tr);
-    }
+  tb.innerHTML = "";
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${r[0]}</td><td class="right">${(r[1] * 100).toFixed(
+      2
+    )}%</td><td class="right">${
+      isFinite(r[2]) ? r[2].toFixed(2) : "—"
+    }</td>`;
+    tb.appendChild(tr);
   }
 }
 function poissonPMF(k, lambda) {
-  return Math.exp(-lambda) * Math.pow(lambda, k) / factorial(k);
+  return (Math.exp(-lambda) * Math.pow(lambda, k)) / factorial(k);
 }
 const factorial = (n) => {
   let r = 1;
@@ -1333,18 +1435,22 @@ const factorial = (n) => {
 
 // ---- Masaniello (simple helper, saved in localStorage)
 function runMasaniello() {
-  const name = $("#ms-name")?.value.trim() || "My System";
-  const cap0 = Number($("#ms-capital")?.value || 0);
-  const target = Number($("#ms-target")?.value || 0);
-  const odds = Number($("#ms-odds")?.value || 0);
-  const n = parseInt($("#ms-n")?.value || 10, 10);
-  const p = Number($("#ms-p")?.value || 0) / 100;
-  const winsDone = parseInt($("#ms-wins")?.value || 0, 10);
+  const name = $("#ms-name").value.trim() || "My System";
+  const cap0 = Number($("#ms-capital").value || 0);
+  const target = Number($("#ms-target").value || 0);
+  const odds = Number($("#ms-odds").value || 0);
+  const n = parseInt($("#ms-n").value || 10, 10);
+  const p = Number($("#ms-p").value || 0) / 100;
+  const winsDone = parseInt($("#ms-wins").value || 0, 10);
 
-  if (cap0 <= 0 || odds <= 1.01 || n <= 0) return alert("Fill capital, odds and number of bets.");
+  if (cap0 <= 0 || odds <= 1.01 || n <= 0)
+    return alert("Fill capital, odds and number of bets.");
 
   const b = odds - 1;
-  const baseStake = Math.max(1, Math.min(cap0 * 0.1, (target / n) / Math.max(0.01, b)));
+  const baseStake = Math.max(
+    1,
+    Math.min(cap0 * 0.1, target / n / Math.max(0.01, b))
+  );
 
   const rows = [];
   let cap = cap0;
@@ -1353,26 +1459,22 @@ function runMasaniello() {
     rows.push({ i, stake, result: "", cap });
   }
 
-  const qEl = $("#ms-q");
-  if (qEl) qEl.textContent = `${Math.round(p * n)} (est.)`;
-  const remEl = $("#ms-rem");
-  if (remEl) remEl.textContent = `${n - winsDone}`;
-  const stakeEl = $("#ms-stake");
-  if (stakeEl) stakeEl.textContent = fmtEur(rows[0]?.stake || 0);
-  const nextWinEl = $("#ms-nextwin");
-  if (nextWinEl) nextWinEl.textContent = fmtEur(cap0 + (rows[0]?.stake || 0) * b);
-  const nextLossEl = $("#ms-nextloss");
-  if (nextLossEl) nextLossEl.textContent = fmtEur(cap0 - (rows[0]?.stake || 0));
+  $("#ms-q").textContent = `${Math.round(p * n)} (est.)`;
+  $("#ms-rem").textContent = `${n - winsDone}`;
+  $("#ms-stake").textContent = fmtEur(rows[0]?.stake || 0);
+  $("#ms-nextwin").textContent = fmtEur(cap0 + (rows[0]?.stake || 0) * b);
+  $("#ms-nextloss").textContent = fmtEur(cap0 - (rows[0]?.stake || 0));
 
   const tb = $("#ms-rows");
-  if (!tb) return;
   tb.innerHTML = "";
   for (const r of rows) {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${r.i}</td>
       <td class="right">${fmtEur(r.stake)}</td>
-      <td class="right"><select data-ms-res="${r.i}"><option value="">—</option><option value="W">WIN</option><option value="L">LOSS</option></select></td>
+      <td class="right"><select data-ms-res="${r.i}">
+          <option value="">—</option><option value="W">WIN</option><option value="L">LOSS</option>
+        </select></td>
       <td class="right" data-ms-cap="${r.i}">${fmtEur(r.cap)}</td>
       <td class="right"><button class="action-btn" data-ms-apply="${r.i}">Apply</button></td>
     `;
@@ -1409,7 +1511,6 @@ function saveMasaniello() {
 function loadMasanielloList() {
   const list = JSON.parse(localStorage.getItem("quantara_masa") || "[]");
   const sel = $("#ms-load");
-  if (!sel) return;
   sel.innerHTML = `<option value="">Load saved…</option>`;
   list.forEach((it, idx) => {
     const opt = document.createElement("option");
@@ -1435,7 +1536,6 @@ function loadMasanielloList() {
 }
 function deleteMasaniello() {
   const sel = $("#ms-load");
-  if (!sel) return;
   const i = sel.value;
   if (i === "") return alert("Select a saved system first.");
   const list = JSON.parse(localStorage.getItem("quantara_masa") || "[]");
@@ -1444,15 +1544,110 @@ function deleteMasaniello() {
   loadMasanielloList();
 }
 
-// ===============================
+// ───────────────────────────────
 // Utils
-// ===============================
+// ───────────────────────────────
 function computeProfitForBankroll(bkId) {
   const rows = State.bets.filter(
-    (b) => b.bankroll_id === bkId && (b.result === "win" || b.result === "loss" || b.result === "void")
+    (b) =>
+      b.bankroll_id === bkId &&
+      (b.result === "win" || b.result === "loss" || b.result === "void")
   );
   return rows.reduce((s, b) => s + profitOf(b), 0);
 }
 
 // (No-op but present for completeness; Overview wiring expects it)
 function wireOverviewUI() {}
+
+function makeSlug() {
+  // 10-char URL-safe slug
+  const alphabet =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let s = "";
+  for (let i = 0; i < 10; i++) {
+    s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  }
+  return s;
+}
+function buildPublicLink(slug) {
+  const base =
+    location.origin +
+    location.pathname.replace(/index\.html?$/i, "index.html");
+  return `${base}?view=${encodeURIComponent(slug)}`;
+}
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    // fallback prompt
+    window.prompt("Copy this link:", text);
+  }
+}
+
+// Add a "Share box" under Overview > Settings
+function ensureShareBox(bk) {
+  const settingsCard = $(
+    '#tab-overview .card.settings'
+  );
+  if (!settingsCard) return;
+
+  let box = settingsCard.querySelector("#share-box");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "share-box";
+    box.style.marginTop = "10px";
+    box.innerHTML = `
+      <div class="muted small" style="margin-bottom:6px;">Share link (read-only)</div>
+      <div class="settings-row">
+        <input id="share-link" type="text" readonly placeholder="Enable sharing to get a link" />
+        <button id="share-enable" class="btn btn-ghost">Copy link</button>
+      </div>
+      <div class="muted small">When enabled, anyone with the link can view this bankroll and its bets.</div>
+    `;
+    settingsCard.appendChild(box);
+
+    $("#share-enable").addEventListener("click", async () => {
+      if (!bk) return alert("Pick a bankroll first.");
+      if (!State.db.hasSharingColumns) {
+        alert(
+          "Sharing is not configured in your database.\n\nPlease run the SQL migration that adds 'public_slug' and 'published' plus public read policies."
+        );
+        return;
+      }
+      // Ensure slug + published
+      if (!bk.public_slug || !bk.published) {
+        const updates = {
+          public_slug: bk.public_slug || makeSlug(),
+          published: true,
+        };
+        const { error } = await supabase
+          .from("bankrolls")
+          .update(updates)
+          .eq("id", bk.id);
+        if (error) {
+          alert(
+            "Could not enable sharing. If the error mentions 'public_slug', run the DB migration first."
+          );
+          return;
+        }
+        bk.public_slug = updates.public_slug;
+        bk.published = true;
+      }
+      const link = buildPublicLink(bk.public_slug);
+      $("#share-link").value = link;
+      await copyToClipboard(link);
+      alert("Share link copied to clipboard.");
+    });
+  }
+
+  // If we already have a published slug, populate the box
+  const linkInput = $("#share-link");
+  if (bk?.public_slug && bk?.published) {
+    linkInput.value = buildPublicLink(bk.public_slug);
+  } else {
+    linkInput.value = "";
+  }
+
+  // In public view, hide the share UI
+  if (PublicViewSlug) box.style.display = "none";
+}
