@@ -1,8 +1,8 @@
-/* QUANTARA — AI Betting Diary (v32, resilient build) */
+/* QUANTARA — AI Betting Diary (v33, resilient build) */
 (function () {
   'use strict';
 
-  // Always-available fallbacks so inline buttons work even if init fails
+  // Fallbacks so inline buttons work even if init fails
   window.__go = (t) => {
     ["home","overview","analytics","roi","calendar","tools"].forEach((id)=>{
       const el = document.getElementById(`tab-${id}`); if (el) el.classList.toggle("hidden", id !== t);
@@ -12,15 +12,14 @@
   window.__openBkModal = () => { const m = document.getElementById('bk-modal'); if (m) m.classList.remove('hidden'); };
   window.__clearActive = () => { localStorage.removeItem('quantara_active_bankroll_id'); const el = document.getElementById('current-bk'); if (el) el.textContent = 'None selected'; };
 
-  // Helpers
   const $  = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
   const fmtEur = (n) => `€${(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2})}`;
   const fmtPct = (n) => `${(Number(n)||0).toFixed(1)}%`;
 
-  // State
   const urlParams = new URLSearchParams(location.search);
   const PublicViewSlug = urlParams.get("view") || null;
+
   const State = {
     user: null,
     activeTab: "home",
@@ -32,14 +31,37 @@
     db: { hasSharingColumns: null },
   };
 
-  // Health flag for quick console check
-  window._QUANTARA_HEALTH = "js-loaded-v32";
+  // Health + debug helpers will show in console
+  window._QUANTARA_HEALTH = "js-loaded-v33";
+
+  // expose simple smoke tests for you to run in console
+  window.__whoami = async () => {
+    if (!window.supabase) return console.warn("supabase not loaded");
+    const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true } });
+    const { data: sess } = await sb.auth.getSession();
+    console.log("whoami:", sess?.session?.user || null);
+    return sess?.session?.user || null;
+  };
+  window.__smoke = async () => {
+    if (!window.supabase) return console.warn("supabase not loaded");
+    const SUPABASE_URL = "https://bycktplwlfrdjxghajkg.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true } });
+    const out = {};
+    out.sdk = !!sb;
+    out.session = (await sb.auth.getSession()).data.session?.user?.id || null;
+    out.bankrolls = await sb.from("bankrolls").select("id").limit(1);
+    out.bets = await sb.from("bets").select("id").limit(1);
+    console.log("SMOKE:", out);
+    return out;
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 
   async function init() {
     try {
-      // Supabase check
       if (!window.supabase || !window.supabase.createClient) {
         alert("Supabase SDK failed to load. Check network/adblock and reload.");
         return;
@@ -49,7 +71,6 @@
         "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5Y2t0cGx3bGZyZGp4Z2hhamtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNjM0MjEsImV4cCI6MjA3MDczOTQyMX0.ovDq1RLEEuOrTNeSek6-lvclXWmJfOz9DoHOv_L71iw";
       const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true } });
 
-      // Wire UI (each function is null-safe)
       wireAuthUI();
       wireOverviewUI();
       wireLedgerUI();
@@ -58,10 +79,8 @@
       wireCalendarUI();
       try { wireToolsUI(); } catch (e) { console.error("wireToolsUI failed but continuing:", e); }
 
-      // DB capability (for sharing)
       await detectDbCapabilities();
 
-      // Public view?
       if (PublicViewSlug) {
         $(".auth")?.classList.add("hidden");
         await loadPublicView(PublicViewSlug);
@@ -69,11 +88,9 @@
         return;
       }
 
-      // Auth/session
       await refreshAuth();
       switchTab(State.activeTab || "home");
 
-      // ---- functions (inside init, access supabase) ----
       function wireAuthUI() {
         $("#signup")?.addEventListener("click", async () => {
           const email = $("#email")?.value.trim();
@@ -94,10 +111,7 @@
         $("#send-link")?.addEventListener("click", async () => {
           const email = $("#email")?.value.trim();
           if (!email) return alert("Enter your email.");
-          const { error } = await supabase.auth.signInWithOtp({
-            email,
-            options: { emailRedirectTo: location.href },
-          });
+          const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
           if (error) return alert(error.message);
           alert("Magic link sent.");
         });
@@ -776,7 +790,7 @@
       }
       function renderToolsLanding() {}
 
-      // Risk tool
+      // Risk
       function runRisk() {
         const BR = Number($("#rk-bankroll")?.value || 0);
         const odds = Number($("#rk-odds")?.value || 0);
@@ -809,7 +823,7 @@
         });
       }
 
-      // Poisson tool
+      // Poisson
       function runPoisson() {
         const lamH = Number($("#ps-home")?.value || 0);
         const lamA = Number($("#ps-away")?.value || 0);
@@ -856,7 +870,7 @@
       function poissonPMF(k, lambda){ return Math.exp(-lambda) * Math.pow(lambda,k) / factorial(k); }
       const factorial = (n)=>{ let r=1; for(let i=2;i<=n;i++) r*=i; return r; };
 
-      // Masaniello tool
+      // Masaniello
       function runMasaniello() {
         const name = $("#ms-name")?.value.trim() || "My System";
         const cap0 = Number($("#ms-capital")?.value || 0);
@@ -915,7 +929,7 @@
         loadMasanielloList();
       }
       function loadMasanielloList() {
-        const sel = $("#ms-load"); if (!sel) return;        // <— FIX: guard if element missing
+        const sel = $("#ms-load"); if (!sel) return;
         const list = JSON.parse(localStorage.getItem("quantara_masa") || "[]");
         sel.innerHTML = `<option value="">Load saved…</option>`;
         list.forEach((it, idx) => {
@@ -946,7 +960,6 @@
         loadMasanielloList();
       }
 
-      // Utils
       function computeProfitForBankroll(bkId) {
         const rows = State.bets.filter((b) => b.bankroll_id === bkId && ["win","loss","void"].includes(b.result));
         return rows.reduce((s, b) => s + profitOf(b), 0);
@@ -991,7 +1004,7 @@
         if (PublicViewSlug) box.style.display = "none";
       }
 
-      // expose for inline tabs
+      // expose real router once ready
       window.__go = switchTab;
 
     } catch (err) {
