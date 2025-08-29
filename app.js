@@ -1,4 +1,4 @@
-/* QUANTARA — AI Betting Diary (v30, resilient build) */
+/* QUANTARA — AI Betting Diary (v31, resilient build) */
 (function () {
   'use strict';
 
@@ -40,9 +40,9 @@
   };
 
   // --- Global health flag (quick check in Console)
-  window._QUANTARA_HEALTH = "js-loaded-v30";
+  window._QUANTARA_HEALTH = "js-loaded-v31";
 
-  // --- Errors surfaced (so we SEE if anything breaks)
+  // --- Errors surfaced
   window.addEventListener("error", (e) => {
     console.error("Uncaught error:", e.error || e.message);
   });
@@ -86,7 +86,7 @@
     await refreshAuth();
     switchTab(State.activeTab || "home");
 
-    // -------------- functions (use supabase inside them) --------------
+    // ---------- functions using supabase (defined inside init) ----------
     function wireAuthUI() {
       $("#signup")?.addEventListener("click", async () => {
         const email = $("#email")?.value.trim();
@@ -116,12 +116,8 @@
       });
 
       $("#signout")?.addEventListener("click", async () => {
-        try {
-          await supabase.auth.signOut();
-        } catch (e) {
-          console.error(e);
-          alert("Sign out failed.");
-        }
+        try { await supabase.auth.signOut(); }
+        catch (e) { console.error(e); alert("Sign out failed."); }
       });
 
       supabase.auth.onAuthStateChange(async (_evt, session) => {
